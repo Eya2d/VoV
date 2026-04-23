@@ -166,7 +166,7 @@
             margin: 20px 0;
             width: 650px;
             max-width: 100%;
-            height: 358px;
+            height: 358px !important;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -1054,15 +1054,32 @@
                 ytPostMessage('addEventListener', 'onStateChange');
                 ytPostMessage('addEventListener', 'onReady');
                 ytPostMessage('getDuration');
+                // استعادة الموضع المحفوظ بعد الجاهزية
+                restoreSavedPosition();
             }
             if (data.event === 'infoDelivery' && data.info) {
-                if (data.info.duration !== undefined)     ytDuration    = data.info.duration;
-                if (data.info.currentTime !== undefined)  ytCurrentTime = data.info.currentTime;
-                if (data.info.volume !== undefined)       ytVolume      = data.info.volume;
-                if (data.info.muted !== undefined)        ytMuted       = data.info.muted;
-                updateProgressBar();
-                updateTimeDisplay();
-                updateTotalTimeDisplay();
+                if (data.info.duration !== undefined) {
+                    ytDuration = data.info.duration;
+                    updateTotalTimeDisplay();
+                }
+                if (data.info.currentTime !== undefined) {
+                    ytCurrentTime = data.info.currentTime;
+                    updateProgressBar();
+                    updateTimeDisplay();
+                    if (isSaving) saveCurrentPosition();
+                }
+                if (data.info.volume !== undefined) {
+                    ytVolume = data.info.volume;
+                    updateVolumeUI(ytVolume / 100);
+                }
+                if (data.info.muted !== undefined) {
+                    ytMuted = data.info.muted;
+                    updateVolumeUI(ytMuted ? 0 : ytVolume / 100);
+                }
+                if (data.info.playbackRate !== undefined) {
+                    currentSpeed = data.info.playbackRate;
+                    updateSpeedLabelInMenu();
+                }
             }
             if (data.event === 'onStateChange') {
                 /* -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=video cued */
@@ -1077,7 +1094,6 @@
                     showControls();
                     clearTimeout(hideTimeout);
                 } else if (state === 3) { // buffering
-                    // اجلب الوقت الحالي
                     ytPostMessage('getCurrentTime');
                 }
             }
@@ -1088,6 +1104,8 @@
                 ytPostMessage('getDuration');
                 ytPostMessage('getVolume');
                 ytPostMessage('isMuted');
+                ytPostMessage('getPlaybackRate');
+                restoreSavedPosition();
             }
         }
         window.addEventListener('message', onYTMessage);
@@ -1107,6 +1125,7 @@
             pollInterval = setInterval(() => {
                 ytPostMessage('getCurrentTime');
                 ytPostMessage('getDuration');
+                if (isSaving && ytCurrentTime > 0) saveCurrentPosition();
             }, 500);
         }
         function stopPolling() {
@@ -1119,6 +1138,18 @@
             wrapper.classList.remove('loading');
             setControlsDisabled(false);
         });
+
+        /* مهلة لتفعيل الأزرار في حال عدم وصول رسالة ready */
+        let readyTimeout = setTimeout(() => {
+            if (!ytPlayerReady) {
+                ytPlayerReady = true;
+                wrapper.classList.remove('loading');
+                setControlsDisabled(false);
+                ytPostMessage('getDuration');
+                ytPostMessage('getCurrentTime');
+                restoreSavedPosition();
+            }
+        }, 3000);
 
         /* ====================================================
            زر الإعدادات
@@ -1140,6 +1171,11 @@
         let isDragging    = false;
 
         function getSpeedLabel(s) { return s === 1 ? 'عادي' : s + 'x'; }
+        function updateSpeedLabelInMenu() {
+            if (!activeMenuEl) return;
+            const labelSpan = activeMenuEl.querySelector('.cvp-current-speed-label');
+            if (labelSpan) labelSpan.textContent = getSpeedLabel(currentSpeed);
+        }
 
         function buildSettingsMenu() {
             const menu = document.createElement('div');
@@ -1172,7 +1208,7 @@
             `;
             SPEED_OPTIONS.forEach(speed => {
                 const label = speed === 1 ? 'عادي (1x)' : speed + 'x';
-                const activeClass = speed === currentSpeed ? 'active' : '';
+                const activeClass = Math.abs(speed - currentSpeed) < 0.01 ? 'active' : '';
                 html += `
                     <button class="cvp-speed-option ${activeClass}" data-speed="${speed}">
                         <span>${label}</span>
@@ -1190,6 +1226,8 @@
                     const speed = parseFloat(opt.dataset.speed);
                     currentSpeed = speed;
                     ytPostMessage('setPlaybackRate', speed);
+                    // طلب تأكيد السرعة الفعلية
+                    setTimeout(() => ytPostMessage('getPlaybackRate'), 200);
                     closeAll();
                 });
             });
@@ -1382,6 +1420,7 @@
             progressFill.style.width = (pct * 100) + '%';
             progressThumb.style.left = (pct * 100) + '%';
             timeDisplay.textContent  = formatTime(ytDuration - newTime);
+            if (isSaving) saveCurrentPosition();
         }
         function getPctFromEvent(e, el) {
             const rect = el.getBoundingClientRect();
@@ -1506,16 +1545,25 @@
         }, { passive: true });
 
         /* ── الصوت ── */
-        function setVolume(vol) {
+        function updateVolumeUI(vol) {
             vol = Math.max(0, Math.min(1, vol));
-            ytVolume = Math.round(vol * 100);
-            ytMuted  = vol === 0;
-            ytPostMessage('setVolume', ytVolume);
-            if (ytMuted) ytPostMessage('mute'); else ytPostMessage('unMute');
             volumeFill.style.width = (vol * 100) + '%';
             const volumeThumb = volumeTrack.querySelector('.volume-thumb');
             if (volumeThumb) volumeThumb.style.left = (vol * 100) + '%';
             volumeIcon.innerHTML = vol === 0 ? SVG_VOL_OFF : SVG_VOL_ON;
+        }
+        function setVolume(vol) {
+            vol = Math.max(0, Math.min(1, vol));
+            ytVolume = Math.round(vol * 100);
+            ytMuted  = vol === 0;
+            if (ytMuted) {
+                ytPostMessage('setVolume', 0);
+                ytPostMessage('mute');
+            } else {
+                ytPostMessage('setVolume', ytVolume);
+                ytPostMessage('unMute');
+            }
+            updateVolumeUI(vol);
         }
         function toggleMute() {
             if (ytMuted || ytVolume === 0) {
@@ -1584,6 +1632,7 @@
                 seekResetTimerRight = setTimeout(() => { seekAccumRight = 0; }, SEEK_RESET_DELAY);
             }
             updateProgressBar();
+            if (isSaving) saveCurrentPosition();
         }
 
         /* ── ظهور/إخفاء عناصر التحكم ── */
@@ -1631,10 +1680,11 @@
             isSaving ? saveBtn.classList.add('active') : saveBtn.classList.remove('active');
         }
         function saveCurrentPosition() {
-            if (!isSaving || !ytCurrentTime) return;
+            if (!isSaving || ytCurrentTime <= 0) return;
             try { localStorage.setItem(storageKey, ytCurrentTime.toString()); } catch(e) {}
         }
         function restoreSavedPosition() {
+            if (!ytPlayerReady) return; // انتظر حتى جاهزية الـ iframe
             try {
                 const saved = localStorage.getItem(storageKey);
                 if (saved) {
@@ -1774,6 +1824,7 @@
             destroy: () => {
                 window.removeEventListener('message', onYTMessage);
                 stopPolling();
+                clearTimeout(readyTimeout);
             }
         });
 
