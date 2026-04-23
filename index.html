@@ -184,6 +184,46 @@
             border-radius: 30px;
             pointer-events: none;
         }
+
+        /* ======================================================
+           iframe wrapper: يخفي عناصر تحكم الـ iframe الأصلية
+           بجعله أكبر من الـ wrapper وقص الزيادة
+        ====================================================== */
+        .custom-video-wrapper .cvp-iframe-container {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            overflow: hidden;
+            pointer-events: none; /* نمنع التفاعل المباشر مع الـ iframe */
+        }
+        /*
+         * نوسّع الـ iframe بمقدار ثابت من كل الجهات لإخفاء شريط أدوات YouTube.
+         * القيمة 60px كافية لإخفاء الشريط السفلي وعناصر التحكم العلوية.
+         * يمكن رفعها إلى 80px إن احتجت.
+         */
+        .custom-video-wrapper .cvp-iframe-container iframe {
+            position: absolute;
+            top:    -60px;
+            left:   -60px;
+            width:  calc(100% + 120px);
+            height: calc(100% + 120px);
+            border: none;
+            display: block;
+            pointer-events: none;
+        }
+
+        /* طبقة شفافة فوق الـ iframe لمنع تفاعل المستخدم مع أدوات الـ iframe */
+        .custom-video-wrapper .cvp-iframe-blocker {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 6;
+            background: transparent;
+            cursor: pointer;
+        }
+
         .custom-video-wrapper video {
             position: relative;
             z-index: 5;
@@ -191,44 +231,6 @@
             width: 100%;
             display: block;
         }
-
-        /* ===== iframe styles ===== */
-        .custom-video-wrapper .cvp-iframe-container {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            z-index: 5;
-            pointer-events: none;
-        }
-        .custom-video-wrapper .cvp-iframe-container iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-            display: block;
-            pointer-events: none;
-        }
-        /* Transparent overlay to block iframe native controls clicks */
-        .custom-video-wrapper .cvp-iframe-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            z-index: 6;
-            background: transparent;
-            cursor: pointer;
-        }
-        /* iframe mode: hide controls that don't apply */
-        .custom-video-wrapper.iframe-mode .custom-volume,
-        .custom-video-wrapper.iframe-mode .Video-save,
-        .custom-video-wrapper.iframe-mode .custom-restart,
-        .custom-video-wrapper.iframe-mode .veowc2s0d,
-        .custom-video-wrapper.iframe-mode .progress-buffered,
-        .custom-video-wrapper.iframe-mode .cvp-settings-corner {
-            display: none !important;
-        }
-        .custom-video-wrapper.iframe-mode .custom-progress {
-            opacity: 0.4;
-            pointer-events: none;
-        }
-        /* ===== end iframe styles ===== */
-
         .custom-video-wrapper button {
             position: relative;
             overflow: hidden;
@@ -856,6 +858,18 @@
             display: flex;
             align-items: center;
         }
+
+        /* ===== مؤشر حالة الـ iframe (تشغيل/إيقاف) ===== */
+        .cvp-iframe-state {
+            position: absolute;
+            z-index: 9;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
     </style>
     `;
 
@@ -875,7 +889,7 @@
     const SVG_SAVE_INACTIVE = `<svg xmlns="http://www.w3.org/2000/svg" class="ionicon" viewBox="0 0 512 512"><path d="M352 48H160a48 48 0 00-48 48v368l144-128 144 128V96a48 48 0 00-48-48z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" style="stroke-width: 38px;"/></svg>`;
     const SVG_SAVE_ACTIVE   = `<svg xmlns="http://www.w3.org/2000/svg" class="ionicon" viewBox="0 0 512 512"><path d="M400 480a16 16 0 01-10.63-4L256 357.41 122.63 476A16 16 0 0196 464V96a64.07 64.07 0 0164-64h192a64.07 64.07 0 0164 64v368a16 16 0 01-16 16z"/></svg>`;
 
-    const SVG_SETTINGS = `<svg xmlns="http://www.w3.org/2000/svg" class="ionicon" viewBox="0 0 512 512"><circle cx="256" cy="256" r="48" style="&#10;    fill: #ffffff00;&#10;"/><path d="M470.39 300l-.47-.38-31.56-24.75a16.11 16.11 0 01-6.1-13.33v-11.56a16 16 0 016.11-13.22L469.92 212l.47-.38a26.68 26.68 0 005.9-34.06l-42.71-73.9a1.59 1.59 0 01-.13-.22A26.86 26.86 0 00401 92.14l-.35.13-37.1 14.93a15.94 15.94 0 01-14.47-1.29q-4.92-3.1-10-5.86a15.94 15.94 0 01-8.19-11.82l-5.59-39.59-.12-.72A27.22 27.22 0 00298.76 26h-85.52a26.92 26.92 0 00-26.45 22.39l-.09.56-5.57 39.67a16 16 0 01-8.13 11.82 175.21 175.21 0 00-10 5.82 15.92 15.92 0 01-14.43 1.27l-37.13-15-.35-.14a26.87 26.87 0 00-32.48 11.34l-.13.22-42.77 73.95a26.71 26.71 0 005.9 34.1l.47.38 31.56 24.75a16.11 16.11 0 016.1 13.33v11.56a16 16 0 01-6.11 13.22L42.08 300l-.47.38a26.68 26.68 0 00-5.9 34.06l42.71 73.9a1.59 1.59 0 01.13.22 26.86 26.86 0 0032.45 11.3l.35-.13 37.07-14.93a15.94 15.94 0 0114.47 1.29q4.92 3.11 10 5.86a15.94 15.94 0 018.19 11.82l5.56 39.59.12.72A27.22 27.22 0 00213.24 486h85.52a26.92 26.92 0 0026.45-22.39l.09-.56 5.57-39.67a16 16 0 018.18-11.82c3.42-1.84 6.76-3.79 10-5.82a15.92 15.92 0 0114.43-1.27l37.13 14.95.35.14a26.85 26.85 0 0032.48-11.34 2.53 2.53 0 01.13-.22l42.71-73.89a26.7 26.7 0 00-5.89-34.11zm-134.48-40.24a80 80 0 11-83.66-83.67 80.21 80.21 0 0183.66 83.67z"/></svg>`;
+    const SVG_SETTINGS = `<svg xmlns="http://www.w3.org/2000/svg" class="ionicon" viewBox="0 0 512 512"><circle cx="256" cy="256" r="48" style="fill: #ffffff00;"/><path d="M470.39 300l-.47-.38-31.56-24.75a16.11 16.11 0 01-6.1-13.33v-11.56a16 16 0 016.11-13.22L469.92 212l.47-.38a26.68 26.68 0 005.9-34.06l-42.71-73.9a1.59 1.59 0 01-.13-.22A26.86 26.86 0 00401 92.14l-.35.13-37.1 14.93a15.94 15.94 0 01-14.47-1.29q-4.92-3.1-10-5.86a15.94 15.94 0 01-8.19-11.82l-5.59-39.59-.12-.72A27.22 27.22 0 00298.76 26h-85.52a26.92 26.92 0 00-26.45 22.39l-.09.56-5.57 39.67a16 16 0 01-8.13 11.82 175.21 175.21 0 00-10 5.82 15.92 15.92 0 01-14.43 1.27l-37.13-15-.35-.14a26.87 26.87 0 00-32.48 11.34l-.13.22-42.77 73.95a26.71 26.71 0 005.9 34.1l.47.38 31.56 24.75a16.11 16.11 0 016.1 13.33v11.56a16 16 0 01-6.11 13.22L42.08 300l-.47.38a26.68 26.68 0 00-5.9 34.06l42.71 73.9a1.59 1.59 0 01.13.22 26.86 26.86 0 0032.45 11.3l.35-.13 37.07-14.93a15.94 15.94 0 0114.47 1.29q4.92 3.11 10 5.86a15.94 15.94 0 018.19 11.82l5.56 39.59.12.72A27.22 27.22 0 00213.24 486h85.52a26.92 26.92 0 0026.45-22.39l.09-.56 5.57-39.67a16 16 0 018.18-11.82c3.42-1.84 6.76-3.79 10-5.82a15.92 15.92 0 0114.43-1.27l37.13 14.95.35.14a26.85 26.85 0 0032.48-11.34 2.53 2.53 0 01.13-.22l42.71-73.89a26.7 26.7 0 00-5.89-34.11zm-134.48-40.24a80 80 0 11-83.66-83.67 80.21 80.21 0 0183.66 83.67z"/></svg>`;
 
     const SVG_SPEED = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M256 48C141.13 48 48 141.13 48 256s93.13 208 208 208 208-93.13 208-208S370.87 48 256 48zm0 375.08a167.08 167.08 0 110-334.16 167.08 167.08 0 010 334.16z"/><path d="M256 128a16 16 0 000 32 96 96 0 11-96 96 16 16 0 00-32 0 128 128 0 10128-128zM280 234.67V144a16 16 0 00-32 0v96a16 16 0 008 13.86l48 27.71a16 16 0 1016-27.71z"/></svg>`;
 
@@ -887,77 +901,36 @@
     const DEFAULT_SPEED = 1;
     const ANIM_DURATION = 180;
 
-    /* ─────────────────────────────────────────────
-       دوال مساعدة لتحويل رابط iframe → embed
-    ───────────────────────────────────────────── */
-    function buildEmbedUrl(src) {
-        if (!src) return src;
+    /* ============================================================
+       دالة مساعدة: هل الـ src من يوتيوب أو Vimeo أو غيره؟
+    ============================================================ */
+    function buildIframeSrc(originalSrc) {
+        if (!originalSrc) return originalSrc;
 
-        // يوتيوب: youtu.be/<id> أو watch?v=<id> أو /embed/ (بدون تغيير)
-        const ytWatch = src.match(/(?:youtube\.com\/watch\?.*v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-        if (ytWatch) {
-            const id = ytWatch[1];
-            // نأخذ start إن وُجد
-            const startMatch = src.match(/[?&](?:start|t)=(\d+)/);
-            const start = startMatch ? `&start=${startMatch[1]}` : '';
-            return `https://www.youtube.com/embed/${id}?autoplay=0&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&fs=0&playsinline=1${start}`;
+        // يوتيوب: youtube.com/watch?v=ID  أو  youtu.be/ID
+        const ytMatch = originalSrc.match(
+            /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+        );
+        if (ytMatch) {
+            const videoId = ytMatch[1];
+            // نضيف: controls=0  enablejsapi=1  rel=0  modestbranding=1  disablekb=1
+            return `https://www.youtube.com/embed/${videoId}?controls=0&enablejsapi=1&rel=0&modestbranding=1&disablekb=1&iv_load_policy=3&fs=0&playsinline=1&showinfo=0&autohide=1&color=white&cc_load_policy=0`;
         }
 
-        // يوتيوب embed موجود مسبقاً: نضيف/نعدّل المعاملات فقط
-        if (/youtube\.com\/embed\//.test(src)) {
-            const url = new URL(src);
-            url.searchParams.set('controls', '0');
-            url.searchParams.set('modestbranding', '1');
-            url.searchParams.set('rel', '0');
-            url.searchParams.set('disablekb', '1');
-            url.searchParams.set('iv_load_policy', '3');
-            url.searchParams.set('fs', '0');
-            url.searchParams.set('playsinline', '1');
-            return url.toString();
+        // Vimeo: vimeo.com/ID
+        const vimeoMatch = originalSrc.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+        if (vimeoMatch) {
+            const videoId = vimeoMatch[1];
+            return `https://player.vimeo.com/video/${videoId}?controls=0&title=0&byline=0&portrait=0&loop=0`;
         }
 
-        // Vimeo: vimeo.com/<id> أو /video/<id>
-        const vimeo = src.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-        if (vimeo) {
-            return `https://player.vimeo.com/video/${vimeo[1]}?controls=0&title=0&byline=0&portrait=0`;
+        // غيرها: أضف ?controls=0 إن لم تكن موجودة
+        if (!/controls=0/.test(originalSrc)) {
+            const sep = originalSrc.includes('?') ? '&' : '?';
+            return originalSrc + sep + 'controls=0';
         }
-
-        // Vimeo player موجود
-        if (/player\.vimeo\.com\/video\//.test(src)) {
-            const url = new URL(src);
-            url.searchParams.set('controls', '0');
-            url.searchParams.set('title', '0');
-            url.searchParams.set('byline', '0');
-            url.searchParams.set('portrait', '0');
-            return url.toString();
-        }
-
-        // روابط أخرى: نُعيد كما هي (المستخدم يضع رابط embed مباشر)
-        return src;
+        return originalSrc;
     }
-
-    /* ─────────────────────────────────────────────
-       YouTube IFrame API للتحكم في التشغيل
-    ───────────────────────────────────────────── */
-    let ytApiReady = false;
-    let ytApiLoading = false;
-    const ytApiCallbacks = [];
-
-    function loadYouTubeAPI(cb) {
-        if (ytApiReady) { cb(); return; }
-        ytApiCallbacks.push(cb);
-        if (ytApiLoading) return;
-        ytApiLoading = true;
-        const tag = document.createElement('script');
-        tag.src = 'https://www.youtube.com/iframe_api';
-        document.head.appendChild(tag);
-    }
-
-    window.onYouTubeIframeAPIReady = function() {
-        ytApiReady = true;
-        ytApiCallbacks.forEach(fn => fn());
-        ytApiCallbacks.length = 0;
-    };
 
     function isMobileDevice() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -974,12 +947,13 @@
         return m + ':' + (sec < 10 ? '0' : '') + sec;
     }
 
-    function getStorageKey(id, suffix) {
+    function getStorageKey(id, suffix = 'pos') {
         const hash = btoa(encodeURIComponent(id)).replace(/[^a-zA-Z0-9]/g, '').substring(0, 60);
         return `cvp_${suffix}_${hash}`;
     }
 
     const allPlayers = [];
+
     window.addEventListener('beforeunload', () => {
         allPlayers.forEach(p => {
             if (p.saveCurrentPosition) p.saveCurrentPosition();
@@ -987,63 +961,42 @@
         });
     });
 
-    /* ═══════════════════════════════════════════════
-       الدالة الرئيسية: تعمل مع <video> و <iframe>
-    ═══════════════════════════════════════════════ */
-    window.customVideoPlayer = function(mediaElement) {
-        if (!mediaElement) return;
+    /* ============================================================
+       معالج مشغّل الـ iframe (يوتيوب وغيره)
+       يتحكم عبر postMessage API (YouTube IFrame API)
+    ============================================================ */
+    window.customIframePlayer = function(iframeElement) {
+        if (!iframeElement) return;
 
-        const isIframe = mediaElement.tagName === 'IFRAME';
+        const originalSrc = iframeElement.src || iframeElement.getAttribute('src') || '';
+        const newSrc = buildIframeSrc(originalSrc);
 
-        /* ── بناء الـ wrapper ── */
+        /* ====================================================
+           بناء الـ wrapper
+        ==================================================== */
         const wrapper = document.createElement('div');
-        wrapper.className = 'custom-video-wrapper loading';
-        if (isIframe) wrapper.classList.add('iframe-mode');
-        mediaElement.parentNode.insertBefore(wrapper, mediaElement);
+        wrapper.className = 'custom-video-wrapper';
+        iframeElement.parentNode.insertBefore(wrapper, iframeElement);
 
-        /* ── إدراج iframe في container معزول ── */
-        let iframeContainer = null;
-        let iframeOverlay   = null;
-        let ytPlayer        = null;       // YouTube Player object
-        let ytReady         = false;
-        let ytDuration      = 0;
-        let ytCurrentTime   = 0;
-        let ytPaused        = true;
-        let ytVolume        = 1;
-        let ytMuted         = false;
-        let ytProgressInterval = null;
-        let vimeoPlayer     = null;
+        /* حاوية الـ iframe مع تكبيره لإخفاء أدوات التشغيل */
+        const iframeContainer = document.createElement('div');
+        iframeContainer.className = 'cvp-iframe-container';
 
-        const isYouTube = isIframe && /youtube\.com|youtu\.be/.test(mediaElement.src || mediaElement.getAttribute('src') || '');
-        const isVimeo   = isIframe && /vimeo\.com/.test(mediaElement.src || mediaElement.getAttribute('src') || '');
+        /* تحديث الـ src بالمعاملات الصحيحة */
+        iframeElement.src = newSrc;
+        iframeElement.setAttribute('allowfullscreen', '');
+        iframeElement.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+        iframeElement.frameBorder = '0';
 
-        if (isIframe) {
-            const rawSrc = mediaElement.getAttribute('src') || '';
-            const embedSrc = buildEmbedUrl(rawSrc);
+        iframeContainer.appendChild(iframeElement);
+        wrapper.appendChild(iframeContainer);
 
-            iframeContainer = document.createElement('div');
-            iframeContainer.className = 'cvp-iframe-container';
+        /* طبقة شفافة تمنع المستخدم من التفاعل مع داخل الـ iframe */
+        const blocker = document.createElement('div');
+        blocker.className = 'cvp-iframe-blocker';
+        wrapper.appendChild(blocker);
 
-            // نستبدل الـ src بالـ embed مع controls=0
-            mediaElement.setAttribute('src', embedSrc);
-            mediaElement.setAttribute('allowfullscreen', '');
-            mediaElement.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-            mediaElement.removeAttribute('controls');
-            iframeContainer.appendChild(mediaElement);
-
-            // overlay شفاف يمنع نقر المستخدم على أدوات iframe
-            iframeOverlay = document.createElement('div');
-            iframeOverlay.className = 'cvp-iframe-overlay';
-            iframeContainer.appendChild(iframeOverlay);
-
-            wrapper.appendChild(iframeContainer);
-        } else {
-            mediaElement.removeAttribute('controls');
-            mediaElement.preload = 'metadata';
-            wrapper.appendChild(mediaElement);
-        }
-
-        /* ── flash overlays ── */
+        /* flash overlays */
         const flashLeft  = document.createElement('div');
         flashLeft.className  = 'seek-flash left';
         flashLeft.innerHTML  = SVG_SEEK_BACK + '<span>-5s</span>';
@@ -1053,7 +1006,7 @@
         wrapper.appendChild(flashLeft);
         wrapper.appendChild(flashRight);
 
-        /* ── أيقونة التشغيل/الإيقاف في المنتصف ── */
+        /* أيقونة تشغيل/إيقاف في المنتصف */
         const centerIcon = document.createElement('div');
         centerIcon.className = 'center-play-icon';
         centerIcon.innerHTML = SVG_PLAY;
@@ -1072,31 +1025,119 @@
             }, 600);
         }
 
-        /* ── scanline (للفيديو العادي فقط) ── */
-        const scanlineDiv = document.createElement('div');
-        scanlineDiv.className = 'xxxxddcvf';
-        scanlineDiv.innerHTML = '<div class="xxxxdww"></div>';
-        if (!isIframe) wrapper.appendChild(scanlineDiv);
+        /* ====================================================
+           التواصل مع الـ iframe عبر postMessage
+           يدعم: YouTube IFrame API
+        ==================================================== */
+        let ytPlayerReady = false;
+        let ytPaused      = true;
+        let ytDuration    = 0;
+        let ytCurrentTime = 0;
+        let ytVolume      = 100; // 0-100 في YouTube API
+        let ytMuted       = false;
 
-        /* ── زر الإعدادات (للفيديو العادي فقط) ── */
-        let settingsCorner, settingsBtn;
-        if (!isIframe) {
-            settingsCorner = document.createElement('div');
-            settingsCorner.className = 'cvp-settings-corner';
-            settingsBtn = document.createElement('button');
-            settingsBtn.className = 'cvp-settings-btn';
-            settingsBtn.title = 'الإعدادات';
-            settingsBtn.innerHTML = SVG_SETTINGS;
-            settingsCorner.appendChild(settingsBtn);
-            wrapper.appendChild(settingsCorner);
+        /* نستمع لرسائل YouTube */
+        function onYTMessage(event) {
+            if (!event.data) return;
+            let data;
+            try {
+                data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            } catch (e) { return; }
+
+            if (!data || !data.event) return;
+
+            if (data.event === 'ready') {
+                ytPlayerReady = true;
+                wrapper.classList.remove('loading');
+                setControlsDisabled(false);
+                /* اطلب معلومات المدة */
+                ytPostMessage('addEventListener', 'onStateChange');
+                ytPostMessage('addEventListener', 'onReady');
+                ytPostMessage('getDuration');
+            }
+            if (data.event === 'infoDelivery' && data.info) {
+                if (data.info.duration !== undefined)     ytDuration    = data.info.duration;
+                if (data.info.currentTime !== undefined)  ytCurrentTime = data.info.currentTime;
+                if (data.info.volume !== undefined)       ytVolume      = data.info.volume;
+                if (data.info.muted !== undefined)        ytMuted       = data.info.muted;
+                updateProgressBar();
+                updateTimeDisplay();
+                updateTotalTimeDisplay();
+            }
+            if (data.event === 'onStateChange') {
+                /* -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=video cued */
+                const state = data.info;
+                if (state === 1) { // playing
+                    ytPaused = false;
+                    updatePlayButton();
+                    scheduleHide();
+                } else if (state === 2 || state === 0) { // paused or ended
+                    ytPaused = true;
+                    updatePlayButton();
+                    showControls();
+                    clearTimeout(hideTimeout);
+                } else if (state === 3) { // buffering
+                    // اجلب الوقت الحالي
+                    ytPostMessage('getCurrentTime');
+                }
+            }
+            if (data.event === 'onReady') {
+                ytPlayerReady = true;
+                wrapper.classList.remove('loading');
+                setControlsDisabled(false);
+                ytPostMessage('getDuration');
+                ytPostMessage('getVolume');
+                ytPostMessage('isMuted');
+            }
         }
+        window.addEventListener('message', onYTMessage);
+
+        function ytPostMessage(func, value) {
+            try {
+                const msg = { event: 'command', func: func };
+                if (value !== undefined) msg.args = Array.isArray(value) ? value : [value];
+                iframeElement.contentWindow.postMessage(JSON.stringify(msg), '*');
+            } catch (e) {}
+        }
+
+        /* تحديث الوقت بشكل دوري (fallback لأن YouTube لا يرسل timeupdate) */
+        let pollInterval = null;
+        function startPolling() {
+            if (pollInterval) return;
+            pollInterval = setInterval(() => {
+                ytPostMessage('getCurrentTime');
+                ytPostMessage('getDuration');
+            }, 500);
+        }
+        function stopPolling() {
+            if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+        }
+
+        /* ابدأ الـ polling فور تحميل الـ iframe */
+        iframeElement.addEventListener('load', () => {
+            startPolling();
+            wrapper.classList.remove('loading');
+            setControlsDisabled(false);
+        });
+
+        /* ====================================================
+           زر الإعدادات
+        ==================================================== */
+        const settingsCorner = document.createElement('div');
+        settingsCorner.className = 'cvp-settings-corner';
+        const settingsBtn = document.createElement('button');
+        settingsBtn.className = 'cvp-settings-btn';
+        settingsBtn.title = 'الإعدادات';
+        settingsBtn.innerHTML = SVG_SETTINGS;
+        settingsCorner.appendChild(settingsBtn);
+        wrapper.appendChild(settingsCorner);
 
         let currentSpeed  = DEFAULT_SPEED;
         let activeMenuEl  = null;
         let backdropEl    = null;
         let isAnimating   = false;
         let menuJustClosed = false;
-        let isDragging = false;
+        let isDragging    = false;
 
         function getSpeedLabel(s) { return s === 1 ? 'عادي' : s + 'x'; }
 
@@ -1130,12 +1171,712 @@
                 </div>
             `;
             SPEED_OPTIONS.forEach(speed => {
-                const label       = speed === 1 ? 'عادي (1x)' : speed + 'x';
+                const label = speed === 1 ? 'عادي (1x)' : speed + 'x';
                 const activeClass = speed === currentSpeed ? 'active' : '';
-                html += `<button class="cvp-speed-option ${activeClass}" data-speed="${speed}">
-                    <span>${label}</span>
-                    <span class="cvp-speed-check">${SVG_CHECK}</span>
-                </button>`;
+                html += `
+                    <button class="cvp-speed-option ${activeClass}" data-speed="${speed}">
+                        <span>${label}</span>
+                        <span class="cvp-speed-check">${SVG_CHECK}</span>
+                    </button>
+                `;
+            });
+            menu.innerHTML = html;
+            menu.querySelector('.cvp-speed-back-btn').addEventListener('click', (e) => {
+                e.stopPropagation(); swapMenu('settings');
+            });
+            menu.querySelectorAll('.cvp-speed-option').forEach(opt => {
+                opt.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const speed = parseFloat(opt.dataset.speed);
+                    currentSpeed = speed;
+                    ytPostMessage('setPlaybackRate', speed);
+                    closeAll();
+                });
+            });
+            menu.addEventListener('click', (e) => e.stopPropagation());
+            return menu;
+        }
+
+        function createBackdrop() {
+            const bd = document.createElement('div');
+            bd.className = 'cvp-backdrop';
+            bd.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                menuJustClosed = true;
+                closeAll();
+                setTimeout(() => { menuJustClosed = false; }, 300);
+            });
+            bd.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+                menuJustClosed = true;
+                closeAll();
+                setTimeout(() => { menuJustClosed = false; }, 300);
+            }, { passive: true });
+            return bd;
+        }
+
+        function mountMenu(menuEl) {
+            if (!backdropEl) {
+                backdropEl = createBackdrop();
+                wrapper.insertBefore(backdropEl, settingsCorner);
+            }
+            settingsCorner.appendChild(menuEl);
+            activeMenuEl = menuEl;
+            settingsBtn.classList.add('open');
+            wrapper.classList.add('settings-open');
+        }
+
+        function unmountCurrent(callback) {
+            if (!activeMenuEl) { if (callback) callback(); return; }
+            const el = activeMenuEl;
+            activeMenuEl = null;
+            el.classList.add('hiding');
+            setTimeout(() => {
+                if (el.parentNode) el.parentNode.removeChild(el);
+                if (callback) callback();
+            }, ANIM_DURATION);
+        }
+
+        function unmountBackdrop() {
+            if (!backdropEl) return;
+            const bd = backdropEl;
+            backdropEl = null;
+            bd.classList.add('hiding');
+            setTimeout(() => { if (bd.parentNode) bd.parentNode.removeChild(bd); }, ANIM_DURATION);
+        }
+
+        function openSettings() {
+            if (isAnimating) return;
+            isAnimating = true;
+            mountMenu(buildSettingsMenu());
+            setTimeout(() => { isAnimating = false; }, ANIM_DURATION);
+        }
+
+        function swapMenu(target) {
+            if (isAnimating) return;
+            isAnimating = true;
+            unmountCurrent(() => {
+                const menu = target === 'speed' ? buildSpeedMenu() : buildSettingsMenu();
+                settingsCorner.appendChild(menu);
+                activeMenuEl = menu;
+                setTimeout(() => { isAnimating = false; }, ANIM_DURATION);
+            });
+        }
+
+        function closeAll() {
+            settingsBtn.classList.remove('open');
+            unmountCurrent();
+            unmountBackdrop();
+            wrapper.classList.remove('settings-open');
+        }
+
+        settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (activeMenuEl) closeAll(); else openSettings();
+        });
+
+        document.addEventListener('mousedown', (e) => {
+            if (activeMenuEl && !wrapper.contains(e.target)) {
+                menuJustClosed = true;
+                closeAll();
+                setTimeout(() => { menuJustClosed = false; }, 300);
+            }
+        });
+
+        /* ====================================================
+           شريط التحكم
+        ==================================================== */
+        const controls = document.createElement('div');
+        controls.className = 'custom-controls';
+        controls.innerHTML = `
+            <div class="custom-progress" tabindex="0">
+                <div class="progress-track">
+                    <div class="progress-buffered"></div>
+                    <div class="progress-fill"></div>
+                    <div class="progress-thumb"></div>
+                    <div class="progress-tooltip">0:00</div>
+                </div>
+            </div>
+            <div class="ccvvvvf00f">
+                <div class="kky66657e0">
+                    <div class="custom-buttons">
+                        <button class="custom-play">${SVG_PLAY}</button>
+                        <button class="custom-restart" title="Restart">${SVG_RESTART}</button>
+                    </div>
+                    <div class="custom-volume" tabindex="0">
+                        <span class="volume-icon">${SVG_VOL_ON}</span>
+                        <div class="volume-track-wrap">
+                            <div class="volume-track">
+                                <div class="volume-fill"></div>
+                                <div class="volume-thumb"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="time1">00:00</div><xxsde></xxsde>
+                    <div class="time">00:00</div>
+                </div>
+                <div class="coooomf">
+                    <button class="Video-save" title="حفظ موضع التشغيل">${SVG_SAVE_INACTIVE}</button>
+                    <button class="custom-fullscreen">${SVG_FULLSCREEN_ENTER}</button>
+                </div>
+            </div>
+        `;
+        wrapper.appendChild(controls);
+
+        const progressTrack    = controls.querySelector('.progress-track');
+        const progressFill     = controls.querySelector('.progress-fill');
+        const progressBuffered = controls.querySelector('.progress-buffered');
+        const progressThumb    = controls.querySelector('.progress-thumb');
+        const progressTooltip  = controls.querySelector('.progress-tooltip');
+        const volumeTrack      = controls.querySelector('.volume-track');
+        const volumeFill       = controls.querySelector('.volume-fill');
+        const volumeWrap       = controls.querySelector('.custom-volume');
+        const playBtn          = controls.querySelector('.custom-play');
+        const restartBtn       = controls.querySelector('.custom-restart');
+        const fullscreenBtn    = controls.querySelector('.custom-fullscreen');
+        const volumeIcon       = controls.querySelector('.volume-icon');
+        const timeDisplay      = controls.querySelector('.time');
+        const totalTimeDisplay = controls.querySelector('.time1');
+        const saveBtn          = controls.querySelector('.Video-save');
+
+        const allButtons = [playBtn, restartBtn, fullscreenBtn, saveBtn, volumeIcon];
+
+        function setControlsDisabled(disabled) {
+            allButtons.forEach(btn => {
+                if (disabled) { btn.setAttribute('disabled', ''); btn.classList.add('disabled'); }
+                else           { btn.removeAttribute('disabled'); btn.classList.remove('disabled'); }
+            });
+            volumeTrack.style.pointerEvents = disabled ? 'none' : 'auto';
+            volumeTrack.style.opacity       = disabled ? '0.5'  : '1';
+        }
+        setControlsDisabled(true);
+
+        /* ── الوقت / شريط التقدم ── */
+        function updateTotalTimeDisplay() {
+            totalTimeDisplay.textContent = ytDuration > 0 ? formatTime(ytDuration) : '0:00';
+        }
+        function updateTimeDisplay() {
+            const remaining = (ytDuration || 0) - (ytCurrentTime || 0);
+            timeDisplay.textContent = formatTime(remaining);
+        }
+        function updateProgressBar() {
+            if (!ytDuration) return;
+            const pct = (ytCurrentTime / ytDuration) * 100;
+            progressFill.style.width = pct + '%';
+            progressThumb.style.left = pct + '%';
+            updateTimeDisplay();
+        }
+        function updateTooltip(clientX) {
+            if (!ytDuration) return;
+            const rect = progressTrack.getBoundingClientRect();
+            let x = clientX - rect.left;
+            x = Math.max(0, Math.min(x, rect.width));
+            progressTooltip.textContent = formatTime((x / rect.width) * ytDuration);
+            progressTooltip.style.left  = x + 'px';
+        }
+        function applySeekPct(pct) {
+            if (!ytDuration) return;
+            const newTime = pct * ytDuration;
+            ytCurrentTime = newTime;
+            ytPostMessage('seekTo', [newTime, true]);
+            progressFill.style.width = (pct * 100) + '%';
+            progressThumb.style.left = (pct * 100) + '%';
+            timeDisplay.textContent  = formatTime(ytDuration - newTime);
+        }
+        function getPctFromEvent(e, el) {
+            const rect = el.getBoundingClientRect();
+            return Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
+        }
+        function getPctFromTouch(touch, el) {
+            const rect = el.getBoundingClientRect();
+            return Math.max(0, Math.min((touch.clientX - rect.left) / rect.width, 1));
+        }
+
+        /* ── شريط تقدم: ماوس ── */
+        let seekingProgress = false;
+        progressTrack.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            seekingProgress = true; isDragging = true;
+            showControls(); clearTimeout(hideTimeout);
+            progressTrack.classList.add('dragging');
+            applySeekPct(getPctFromEvent(e, progressTrack));
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (seekingProgress) { applySeekPct(getPctFromEvent(e, progressTrack)); updateTooltip(e.clientX); }
+            else if (seekingVolume) { volFromClientX(e.clientX); }
+        });
+        document.addEventListener('mouseup', () => {
+            if (seekingProgress) {
+                seekingProgress = false; isDragging = false;
+                progressTrack.classList.remove('dragging');
+                if (!ytPaused) scheduleHide();
+            }
+            if (seekingVolume) {
+                seekingVolume = false; isDragging = false;
+                if (!ytPaused) scheduleHide();
+            }
+        });
+        progressTrack.addEventListener('mousemove', (e) => updateTooltip(e.clientX));
+
+        /* ── شريط تقدم: لمس ── */
+        let touchSeekingProgress = false;
+        progressTrack.addEventListener('touchstart', (e) => {
+            e.stopPropagation(); e.preventDefault();
+            touchSeekingProgress = true; isDragging = true;
+            showControls(); clearTimeout(hideTimeout);
+            progressTrack.classList.add('dragging');
+            const t = e.touches[0];
+            applySeekPct(getPctFromTouch(t, progressTrack));
+            updateTooltip(t.clientX);
+        }, { passive: false });
+        progressTrack.addEventListener('touchmove', (e) => {
+            if (!touchSeekingProgress) return;
+            e.stopPropagation(); e.preventDefault();
+            const t = e.touches[0];
+            applySeekPct(getPctFromTouch(t, progressTrack));
+            updateTooltip(t.clientX);
+        }, { passive: false });
+        progressTrack.addEventListener('touchend', (e) => {
+            if (!touchSeekingProgress) return;
+            e.stopPropagation();
+            touchSeekingProgress = false; isDragging = false;
+            progressTrack.classList.remove('dragging');
+            scheduleHide();
+        }, { passive: true });
+        progressTrack.addEventListener('touchcancel', () => {
+            touchSeekingProgress = false; isDragging = false;
+            progressTrack.classList.remove('dragging');
+        }, { passive: true });
+
+        /* ── شريط الصوت: ماوس ── */
+        let seekingVolume = false;
+        function volFromClientX(clientX) {
+            const rect = volumeTrack.getBoundingClientRect();
+            let x = clientX - rect.left;
+            x = Math.max(0, Math.min(x, rect.width));
+            setVolume(x / rect.width);
+        }
+        volumeTrack.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            seekingVolume = true; isDragging = true;
+            showControls(); clearTimeout(hideTimeout);
+            volFromClientX(e.clientX);
+        });
+
+        /* ── شريط الصوت: لمس ── */
+        let touchSeekingVolume = false;
+        let volumeTouchExpandTimer = null;
+        volumeIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isMobileDevice()) {
+                volumeWrap.classList.add('touch-expanded');
+                clearTimeout(volumeTouchExpandTimer);
+                volumeTouchExpandTimer = setTimeout(() => volumeWrap.classList.remove('touch-expanded'), 3000);
+            }
+            toggleMute();
+        });
+        volumeTrack.addEventListener('touchstart', (e) => {
+            e.stopPropagation(); e.preventDefault();
+            touchSeekingVolume = true; isDragging = true;
+            showControls(); clearTimeout(hideTimeout);
+            volumeTrack.style.height = '6px';
+            const t = e.touches[0];
+            const rect = volumeTrack.getBoundingClientRect();
+            setVolume(Math.max(0, Math.min((t.clientX - rect.left) / rect.width, 1)));
+            clearTimeout(volumeTouchExpandTimer);
+        }, { passive: false });
+        volumeTrack.addEventListener('touchmove', (e) => {
+            if (!touchSeekingVolume) return;
+            e.stopPropagation(); e.preventDefault();
+            const t = e.touches[0];
+            const rect = volumeTrack.getBoundingClientRect();
+            setVolume(Math.max(0, Math.min((t.clientX - rect.left) / rect.width, 1)));
+        }, { passive: false });
+        volumeTrack.addEventListener('touchend', (e) => {
+            if (!touchSeekingVolume) return;
+            e.stopPropagation();
+            touchSeekingVolume = false; isDragging = false;
+            volumeTrack.style.height = '';
+            scheduleHide();
+            volumeTouchExpandTimer = setTimeout(() => volumeWrap.classList.remove('touch-expanded'), 2000);
+        }, { passive: true });
+        volumeTrack.addEventListener('touchcancel', () => {
+            touchSeekingVolume = false; isDragging = false;
+            volumeTrack.style.height = '';
+        }, { passive: true });
+
+        /* ── الصوت ── */
+        function setVolume(vol) {
+            vol = Math.max(0, Math.min(1, vol));
+            ytVolume = Math.round(vol * 100);
+            ytMuted  = vol === 0;
+            ytPostMessage('setVolume', ytVolume);
+            if (ytMuted) ytPostMessage('mute'); else ytPostMessage('unMute');
+            volumeFill.style.width = (vol * 100) + '%';
+            const volumeThumb = volumeTrack.querySelector('.volume-thumb');
+            if (volumeThumb) volumeThumb.style.left = (vol * 100) + '%';
+            volumeIcon.innerHTML = vol === 0 ? SVG_VOL_OFF : SVG_VOL_ON;
+        }
+        function toggleMute() {
+            if (ytMuted || ytVolume === 0) {
+                const restore = iframeElement._lastVol !== undefined ? iframeElement._lastVol : 1;
+                setVolume(restore);
+            } else {
+                iframeElement._lastVol = ytVolume / 100;
+                setVolume(0);
+            }
+        }
+
+        /* ── تشغيل / إيقاف ── */
+        function updatePlayButton() {
+            playBtn.innerHTML = ytPaused ? SVG_PLAY : SVG_PAUSE;
+        }
+        function pauseOthers() {
+            allPlayers.forEach(p => {
+                if (p.iframeElement !== iframeElement) ytPostMessage('pauseVideo');
+            });
+        }
+        function playPause() {
+            if (ytPaused) {
+                pauseOthers();
+                ytPostMessage('playVideo');
+                showCenterIcon(false);
+            } else {
+                ytPostMessage('pauseVideo');
+                showCenterIcon(true);
+            }
+        }
+        function restartVideo() {
+            ytPostMessage('seekTo', [0, true]);
+            ytPostMessage('playVideo');
+            showCenterIcon(false);
+        }
+
+        /* ── Seek ── */
+        let seekAccumLeft = 0, seekAccumRight = 0;
+        let seekResetTimerLeft = null, seekResetTimerRight = null;
+        const SEEK_RESET_DELAY = 1000;
+
+        function showFlash(side, seconds) {
+            const el = side === 'left' ? flashLeft : flashRight;
+            el.querySelector('span').textContent = (side === 'left' ? '-' : '+') + seconds + 's';
+            el.classList.add('show');
+            const key = '_hideTimer';
+            clearTimeout(el[key]);
+            el[key] = setTimeout(() => el.classList.remove('show'), 800);
+        }
+
+        function seekBy(seconds) {
+            const side = seconds < 0 ? 'left' : 'right';
+            if (side === 'left') {
+                clearTimeout(seekResetTimerLeft);
+                seekAccumLeft += Math.abs(seconds);
+                ytCurrentTime = Math.max(0, ytCurrentTime - Math.abs(seconds));
+                ytPostMessage('seekTo', [ytCurrentTime, true]);
+                showFlash('left', seekAccumLeft);
+                seekResetTimerLeft = setTimeout(() => { seekAccumLeft = 0; }, SEEK_RESET_DELAY);
+            } else {
+                clearTimeout(seekResetTimerRight);
+                seekAccumRight += Math.abs(seconds);
+                ytCurrentTime = Math.min(ytDuration || 0, ytCurrentTime + Math.abs(seconds));
+                ytPostMessage('seekTo', [ytCurrentTime, true]);
+                showFlash('right', seekAccumRight);
+                seekResetTimerRight = setTimeout(() => { seekAccumRight = 0; }, SEEK_RESET_DELAY);
+            }
+            updateProgressBar();
+        }
+
+        /* ── ظهور/إخفاء عناصر التحكم ── */
+        let hideTimeout = null;
+        let mobileControlsVisible = false;
+
+        function showControls() {
+            wrapper.classList.add('controls-visible');
+            wrapper.classList.remove('cursor-hidden');
+            if (isMobileDevice()) mobileControlsVisible = true;
+        }
+        function scheduleHide() {
+            clearTimeout(hideTimeout);
+            if (isDragging) return;
+            hideTimeout = setTimeout(() => {
+                if (!ytPaused && !isDragging) {
+                    wrapper.classList.remove('controls-visible');
+                    wrapper.classList.add('cursor-hidden');
+                    if (isMobileDevice()) mobileControlsVisible = false;
+                }
+            }, 3000);
+        }
+        function updateControlsVisibility() {
+            if (ytPaused) { showControls(); clearTimeout(hideTimeout); }
+            else          { scheduleHide(); }
+        }
+
+        wrapper.addEventListener('mousemove', () => { showControls(); if (!ytPaused) scheduleHide(); });
+        wrapper.addEventListener('mouseleave', () => {
+            if (isDragging) return;
+            if (!ytPaused) {
+                clearTimeout(hideTimeout);
+                wrapper.classList.remove('controls-visible', 'cursor-hidden');
+                if (isMobileDevice()) mobileControlsVisible = false;
+            }
+        });
+
+        /* ── حفظ موضع التشغيل ── */
+        let isSaving   = false;
+        let saveInterval = null;
+        const storageKey = getStorageKey(originalSrc, 'pos');
+
+        function updateSaveIcon() {
+            saveBtn.innerHTML = isSaving ? SVG_SAVE_ACTIVE : SVG_SAVE_INACTIVE;
+            isSaving ? saveBtn.classList.add('active') : saveBtn.classList.remove('active');
+        }
+        function saveCurrentPosition() {
+            if (!isSaving || !ytCurrentTime) return;
+            try { localStorage.setItem(storageKey, ytCurrentTime.toString()); } catch(e) {}
+        }
+        function restoreSavedPosition() {
+            try {
+                const saved = localStorage.getItem(storageKey);
+                if (saved) {
+                    const t = parseFloat(saved);
+                    if (!isNaN(t) && t > 0) {
+                        isSaving = true; updateSaveIcon();
+                        ytPostMessage('seekTo', [t, true]);
+                    }
+                }
+            } catch(e) {}
+        }
+        function startSaving() {
+            isSaving = true; updateSaveIcon();
+            saveCurrentPosition();
+            saveInterval = setInterval(saveCurrentPosition, 1000);
+        }
+        function stopSaving() {
+            isSaving = false; updateSaveIcon();
+            clearInterval(saveInterval); saveInterval = null;
+            try { localStorage.removeItem(storageKey); } catch(e) {}
+        }
+        saveBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isSaving) stopSaving(); else startSaving();
+        });
+
+        /* ── fullscreen ── */
+        function updateFullscreenButton() {
+            fullscreenBtn.innerHTML = document.fullscreenElement ? SVG_FULLSCREEN_EXIT : SVG_FULLSCREEN_ENTER;
+        }
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) wrapper.requestFullscreen().catch(() => {});
+            else document.exitFullscreen();
+        }
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement === wrapper) document.body.classList.add('dideofullscreen');
+            else if (!document.fullscreenElement)       document.body.classList.remove('dideofullscreen');
+            updateFullscreenButton();
+        });
+
+        /* ── لوحة المفاتيح ── */
+        wrapper.setAttribute('tabindex', '0');
+        wrapper.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case ' ': case 'k':
+                    e.preventDefault();
+                    if (activeMenuEl) { closeAll(); break; }
+                    playPause(); break;
+                case 'ArrowRight': e.preventDefault(); seekBy(5); break;
+                case 'ArrowLeft':  e.preventDefault(); seekBy(-5); break;
+                case 'ArrowUp':    e.preventDefault(); setVolume(ytVolume / 100 + 0.1); break;
+                case 'ArrowDown':  e.preventDefault(); setVolume(ytVolume / 100 - 0.1); break;
+                case 'f': e.preventDefault(); toggleFullscreen(); break;
+                case 'm': e.preventDefault(); toggleMute(); break;
+                case 'Escape': if (activeMenuEl) { e.preventDefault(); closeAll(); } break;
+            }
+        });
+
+        /* ── اللمس على الـ blocker ── */
+        const SCROLL_THRESHOLD = 10, TAP_MOVE_LIMIT = 8, TAP_DELAY = 300;
+        let touchStartX = 0, touchStartY = 0, touchMoved = false, touchIsScrolling = false;
+        let tapCount = 0, tapTimer = null, tapSide = null;
+
+        blocker.addEventListener('touchstart', (e) => {
+            const t = e.touches[0];
+            touchStartX = t.clientX; touchStartY = t.clientY;
+            touchMoved = false; touchIsScrolling = false;
+        }, { passive: true });
+
+        blocker.addEventListener('touchmove', (e) => {
+            const t = e.touches[0];
+            const dx = Math.abs(t.clientX - touchStartX);
+            const dy = Math.abs(t.clientY - touchStartY);
+            if (!touchMoved && (dx > TAP_MOVE_LIMIT || dy > TAP_MOVE_LIMIT)) touchMoved = true;
+            if (!touchIsScrolling && dy > SCROLL_THRESHOLD && dy > dx) touchIsScrolling = true;
+            if (!touchIsScrolling) e.preventDefault();
+        }, { passive: false });
+
+        blocker.addEventListener('touchend', (e) => {
+            if (touchIsScrolling || touchMoved) { touchIsScrolling = false; touchMoved = false; return; }
+            e.preventDefault();
+            if (activeMenuEl) {
+                menuJustClosed = true; closeAll();
+                setTimeout(() => { menuJustClosed = false; }, 300);
+                touchMoved = false; touchIsScrolling = false; return;
+            }
+            if (menuJustClosed) { touchMoved = false; touchIsScrolling = false; return; }
+            if (!mobileControlsVisible) {
+                showControls(); scheduleHide();
+                touchMoved = false; touchIsScrolling = false; return;
+            }
+            const touch = e.changedTouches[0];
+            const rect  = wrapper.getBoundingClientRect();
+            const side  = (touch.clientX - rect.left) < rect.width / 2 ? 'left' : 'right';
+            if (tapCount === 1 && tapSide === side) {
+                clearTimeout(tapTimer); tapCount = 0; tapSide = null;
+                seekBy(side === 'right' ? 5 : -5);
+                showControls(); if (!ytPaused) scheduleHide();
+            } else {
+                tapCount = 1; tapSide = side;
+                clearTimeout(tapTimer);
+                tapTimer = setTimeout(() => {
+                    if (tapCount === 1) { playPause(); showControls(); updateControlsVisibility(); }
+                    tapCount = 0; tapSide = null;
+                }, TAP_DELAY);
+            }
+            touchMoved = false; touchIsScrolling = false;
+        }, { passive: false });
+
+        /* ── نقر الماوس على الـ blocker ── */
+        blocker.addEventListener('click', (e) => {
+            if (isMobileDevice()) return;
+            e.stopPropagation();
+            if (activeMenuEl) { menuJustClosed = true; closeAll(); setTimeout(() => { menuJustClosed = false; }, 300); return; }
+            if (menuJustClosed) return;
+            playPause();
+        });
+
+        /* ── أزرار التحكم ── */
+        playBtn.addEventListener('click',       (e) => { e.stopPropagation(); playPause(); });
+        restartBtn.addEventListener('click',    (e) => { e.stopPropagation(); restartVideo(); });
+        fullscreenBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleFullscreen(); });
+
+        /* ── تهيئة أولية ── */
+        showControls();
+        updatePlayButton();
+        updateTimeDisplay();
+        updateSaveIcon();
+        updateTotalTimeDisplay();
+
+        /* نضيف للقائمة العامة للتنظيف */
+        allPlayers.push({
+            iframeElement,
+            wrapper,
+            saveCurrentPosition,
+            saveCurrentVolume: () => {},
+            destroy: () => {
+                window.removeEventListener('message', onYTMessage);
+                stopPolling();
+            }
+        });
+
+        return wrapper;
+    };
+
+    /* ============================================================
+       المشغّل الأصلي للـ <video>
+    ============================================================ */
+    window.customVideoPlayer = function(videoElement) {
+        if (!videoElement) return;
+
+        videoElement.removeAttribute('controls');
+        videoElement.preload = 'metadata';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'custom-video-wrapper loading';
+        videoElement.parentNode.insertBefore(wrapper, videoElement);
+        wrapper.appendChild(videoElement);
+
+        const flashLeft  = document.createElement('div');
+        flashLeft.className  = 'seek-flash left';
+        flashLeft.innerHTML  = SVG_SEEK_BACK + '<span>-5s</span>';
+        const flashRight = document.createElement('div');
+        flashRight.className = 'seek-flash right';
+        flashRight.innerHTML = SVG_SEEK_FWD + '<span>+5s</span>';
+        wrapper.appendChild(flashLeft);
+        wrapper.appendChild(flashRight);
+
+        const centerIcon = document.createElement('div');
+        centerIcon.className = 'center-play-icon';
+        centerIcon.innerHTML = SVG_PLAY;
+        wrapper.appendChild(centerIcon);
+
+        let centerIconTimer = null;
+        function showCenterIcon(isPlay) {
+            centerIcon.innerHTML = isPlay ? SVG_PLAY : SVG_PAUSE;
+            clearTimeout(centerIconTimer);
+            centerIcon.classList.remove('animate-out');
+            void centerIcon.offsetWidth;
+            centerIcon.classList.add('animate-in');
+            centerIconTimer = setTimeout(() => {
+                centerIcon.classList.remove('animate-in');
+                centerIcon.classList.add('animate-out');
+            }, 600);
+        }
+
+        const scanlineDiv = document.createElement('div');
+        scanlineDiv.className = 'xxxxddcvf';
+        scanlineDiv.innerHTML = '<div class="xxxxdww"></div>';
+        wrapper.appendChild(scanlineDiv);
+
+        const settingsCorner = document.createElement('div');
+        settingsCorner.className = 'cvp-settings-corner';
+        const settingsBtn = document.createElement('button');
+        settingsBtn.className = 'cvp-settings-btn';
+        settingsBtn.title = 'الإعدادات';
+        settingsBtn.innerHTML = SVG_SETTINGS;
+        settingsCorner.appendChild(settingsBtn);
+        wrapper.appendChild(settingsCorner);
+
+        let currentSpeed   = DEFAULT_SPEED;
+        let activeMenuEl   = null;
+        let backdropEl     = null;
+        let isAnimating    = false;
+        let menuJustClosed = false;
+        let isDragging     = false;
+
+        function getSpeedLabel(s) { return s === 1 ? 'عادي' : s + 'x'; }
+
+        function buildSettingsMenu() {
+            const menu = document.createElement('div');
+            menu.className = 'cvp-settings-menu';
+            menu.innerHTML = `
+                <button class="cvp-settings-menu-item cvp-speed-trigger">
+                    ${SVG_SPEED}
+                    <span>سرعة التشغيل</span>
+                    <span class="cvp-menu-item-right">
+                        <span class="cvp-current-speed-label">${getSpeedLabel(currentSpeed)}</span>
+                        ${SVG_ARROW_RIGHT}
+                    </span>
+                </button>
+            `;
+            menu.querySelector('.cvp-speed-trigger').addEventListener('click', (e) => {
+                e.stopPropagation(); swapMenu('speed');
+            });
+            menu.addEventListener('click', (e) => e.stopPropagation());
+            return menu;
+        }
+
+        function buildSpeedMenu() {
+            const menu = document.createElement('div');
+            menu.className = 'cvp-speed-menu';
+            let html = `
+                <div class="cvp-speed-menu-header">
+                    <button class="cvp-speed-back-btn" title="رجوع">${SVG_ARROW_LEFT}</button>
+                    <span class="cvp-speed-menu-title">سرعة التشغيل</span>
+                </div>
+            `;
+            SPEED_OPTIONS.forEach(speed => {
+                const label = speed === 1 ? 'عادي (1x)' : speed + 'x';
+                const activeClass = speed === currentSpeed ? 'active' : '';
+                html += `<button class="cvp-speed-option ${activeClass}" data-speed="${speed}"><span>${label}</span><span class="cvp-speed-check">${SVG_CHECK}</span></button>`;
             });
             menu.innerHTML = html;
             menu.querySelector('.cvp-speed-back-btn').addEventListener('click', (e) => {
@@ -1145,8 +1886,7 @@
                 opt.addEventListener('click', (e) => {
                     e.stopPropagation();
                     currentSpeed = parseFloat(opt.dataset.speed);
-                    if (!isIframe) mediaElement.playbackRate = currentSpeed;
-                    else if (ytPlayer && ytPlayer.setPlaybackRate) ytPlayer.setPlaybackRate(currentSpeed);
+                    videoElement.playbackRate = currentSpeed;
                     closeAll();
                 });
             });
@@ -1175,11 +1915,11 @@
             settingsBtn.classList.add('open');
             wrapper.classList.add('settings-open');
         }
-        function unmountCurrent(cb) {
-            if (!activeMenuEl) { if (cb) cb(); return; }
+        function unmountCurrent(callback) {
+            if (!activeMenuEl) { if (callback) callback(); return; }
             const el = activeMenuEl; activeMenuEl = null;
             el.classList.add('hiding');
-            setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); if (cb) cb(); }, ANIM_DURATION);
+            setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); if (callback) callback(); }, ANIM_DURATION);
         }
         function unmountBackdrop() {
             if (!backdropEl) return;
@@ -1201,25 +1941,22 @@
             });
         }
         function closeAll() {
-            if (settingsBtn) settingsBtn.classList.remove('open');
+            settingsBtn.classList.remove('open');
             unmountCurrent(); unmountBackdrop();
             wrapper.classList.remove('settings-open');
         }
 
-        if (!isIframe) {
-            settingsBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (activeMenuEl) closeAll(); else openSettings();
-            });
-            document.addEventListener('mousedown', (e) => {
-                if (activeMenuEl && !wrapper.contains(e.target)) {
-                    menuJustClosed = true; closeAll();
-                    setTimeout(() => { menuJustClosed = false; }, 300);
-                }
-            });
-        }
+        settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (activeMenuEl) closeAll(); else openSettings();
+        });
+        document.addEventListener('mousedown', (e) => {
+            if (activeMenuEl && !wrapper.contains(e.target)) {
+                menuJustClosed = true; closeAll();
+                setTimeout(() => { menuJustClosed = false; }, 300);
+            }
+        });
 
-        /* ══ شريط التحكم ══ */
         const controls = document.createElement('div');
         controls.className = 'custom-controls';
         controls.innerHTML = `
@@ -1251,7 +1988,7 @@
                 </div>
                 <div class="coooomf">
                     <button class="Video-save" title="حفظ موضع التشغيل">${SVG_SAVE_INACTIVE}</button>
-                    <button class="veowc2s0d" title="Old TV quality"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" fill-rule="evenodd" d="M3 3.5h10A1.5 1.5 0 0 1 14.5 5v5a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 10V5A1.5 1.5 0 0 1 3 3.5m-.21 9.493A3 3 0 0 1 0 10V5a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v5a3 3 0 0 1-2.79 2.993l.46.922a.75.75 0 1 1-1.34.67L11.536 13H4.464l-.793 1.585a.75.75 0 1 1-1.342-.67z" clip-rule="evenodd"/></svg></button>
+                    <button class="veowc2s0d" title="Old TV quality"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 16 16" width="16" height="16"> <path fill="currentColor" fill-rule="evenodd" d="M3 3.5h10A1.5 1.5 0 0 1 14.5 5v5a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 10V5A1.5 1.5 0 0 1 3 3.5m-.21 9.493A3 3 0 0 1 0 10V5a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v5a3 3 0 0 1-2.79 2.993l.46.922a.75.75 0 1 1-1.34.67L11.536 13H4.464l-.793 1.585a.75.75 0 1 1-1.342-.67z" clip-rule="evenodd"/> </svg></button>
                     <button class="custom-fullscreen">${SVG_FULLSCREEN_ENTER}</button>
                 </div>
             </div>
@@ -1276,219 +2013,100 @@
         const toggleScanBtn    = controls.querySelector('.veowc2s0d');
         const saveBtn          = controls.querySelector('.Video-save');
 
-        const allButtons = isIframe
-            ? [playBtn, fullscreenBtn]
-            : [playBtn, restartBtn, fullscreenBtn, toggleScanBtn, saveBtn, volumeIcon];
+        const allButtons = [playBtn, restartBtn, fullscreenBtn, toggleScanBtn, saveBtn, volumeIcon];
 
         function setControlsDisabled(disabled) {
             allButtons.forEach(btn => {
                 if (disabled) { btn.setAttribute('disabled', ''); btn.classList.add('disabled'); }
-                else { btn.removeAttribute('disabled'); btn.classList.remove('disabled'); }
+                else           { btn.removeAttribute('disabled'); btn.classList.remove('disabled'); }
             });
-            if (!isIframe) {
-                const vt = controls.querySelector('.volume-track');
-                vt.style.pointerEvents = disabled ? 'none' : 'auto';
-                vt.style.opacity = disabled ? '0.5' : '1';
-            }
+            volumeTrack.style.pointerEvents = disabled ? 'none' : 'auto';
+            volumeTrack.style.opacity       = disabled ? '0.5'  : '1';
         }
         setControlsDisabled(true);
 
-        /* ══ منطق الفيديو العادي ══ */
-        if (!isIframe) {
-            function updateTotalTimeDisplay() {
-                const d = mediaElement.duration;
-                totalTimeDisplay.textContent = (!isNaN(d) && d !== Infinity) ? formatTime(d) : '0:00';
-            }
-            mediaElement.addEventListener('canplay', () => {
-                wrapper.classList.remove('loading');
-                setControlsDisabled(false);
-                updateTotalTimeDisplay();
-            }, { once: true });
-            mediaElement.addEventListener('error', () => {
-                wrapper.classList.remove('loading'); setControlsDisabled(false);
-            });
-            mediaElement.addEventListener('durationchange', updateTotalTimeDisplay);
-
-            /* حفظ/استعادة الصوت */
-            let volKey = null;
-            function getVolKey() { if (!volKey) volKey = getStorageKey(mediaElement.src || mediaElement.currentSrc || '', 'vol'); return volKey; }
-            function saveCurrentVolume() {
-                try { localStorage.setItem(getVolKey(), mediaElement.muted ? '0' : mediaElement.volume.toString()); } catch(e) {}
-            }
-            function restoreVolume() {
-                try {
-                    const saved = localStorage.getItem(getVolKey());
-                    if (saved !== null) {
-                        const vol = parseFloat(saved);
-                        if (!isNaN(vol)) { if (vol === 0) { mediaElement.muted = true; mediaElement.volume = 0; } else { mediaElement.muted = false; mediaElement.volume = Math.min(1, Math.max(0, vol)); } setVolume(mediaElement.muted ? 0 : mediaElement.volume); return; }
-                    }
-                } catch(e) {}
-                setVolume(1);
-            }
-
-            /* حفظ/استعادة الموضع */
-            let isSaving = false, saveInterval = null, storageKey = null;
-            function getPosKey() { if (!storageKey) storageKey = getStorageKey(mediaElement.src || '', 'pos'); return storageKey; }
-            function updateSaveIcon() {
-                saveBtn.innerHTML = isSaving ? SVG_SAVE_ACTIVE : SVG_SAVE_INACTIVE;
-                isSaving ? saveBtn.classList.add('active') : saveBtn.classList.remove('active');
-            }
-            function saveCurrentPosition() {
-                if (!isSaving) return;
-                const t = mediaElement.currentTime;
-                if (!isNaN(t) && t > 0) try { localStorage.setItem(getPosKey(), t.toString()); } catch(e) {}
-            }
-            function restoreSavedPosition() {
-                try {
-                    const saved = localStorage.getItem(getPosKey());
-                    if (saved !== null) {
-                        const t = parseFloat(saved);
-                        if (!isNaN(t) && t > 0) { isSaving = true; updateSaveIcon(); mediaElement.currentTime = t; }
-                    }
-                } catch(e) {}
-            }
-            function startSaving() { isSaving = true; updateSaveIcon(); saveCurrentPosition(); saveInterval = setInterval(saveCurrentPosition, 1000); }
-            function stopSaving()  { isSaving = false; updateSaveIcon(); clearInterval(saveInterval); saveInterval = null; try { localStorage.removeItem(getPosKey()); } catch(e) {} }
-
-            saveBtn.addEventListener('click', (e) => { e.stopPropagation(); if (isSaving) stopSaving(); else startSaving(); });
-            mediaElement.addEventListener('seeked', () => saveCurrentPosition());
-            mediaElement.addEventListener('timeupdate', () => { if (isSaving) saveCurrentPosition(); });
-            mediaElement.addEventListener('loadedmetadata', () => {
-                storageKey = getStorageKey(mediaElement.src || '', 'pos');
-                restoreSavedPosition(); restoreVolume(); updateProgressBar(); updateTotalTimeDisplay();
-            });
-
-            allPlayers.push({ videoElement: mediaElement, wrapper, saveCurrentPosition, saveCurrentVolume });
-
-            mediaElement.addEventListener('timeupdate', updateProgressBar);
-            mediaElement.addEventListener('progress', updateBuffered);
-            mediaElement.addEventListener('play',  () => { updatePlayButton(); updateControlsVisibility(); });
-            mediaElement.addEventListener('pause', () => { updatePlayButton(); updateControlsVisibility(); });
-            mediaElement.addEventListener('ended', () => { updatePlayButton(); updateControlsVisibility(); });
+        function updateTotalTimeDisplay() {
+            const d = videoElement.duration;
+            totalTimeDisplay.textContent = (!isNaN(d) && d !== Infinity) ? formatTime(d) : '0:00';
         }
 
-        /* ══ منطق YouTube IFrame API ══ */
-        if (isYouTube) {
-            // نحتاج id من الـ iframe لتهيئة YT.Player
-            const iframeEl = mediaElement;
-            if (!iframeEl.id) iframeEl.id = 'cvp-yt-' + Math.random().toString(36).slice(2, 8);
-
-            loadYouTubeAPI(() => {
-                ytPlayer = new YT.Player(iframeEl.id, {
-                    events: {
-                        onReady: (event) => {
-                            ytReady = true;
-                            ytDuration = event.target.getDuration();
-                            totalTimeDisplay.textContent = formatTime(ytDuration);
-                            wrapper.classList.remove('loading');
-                            setControlsDisabled(false);
-                            updatePlayButton();
-                            // تحديث شريط التقدم بشكل دوري
-                            ytProgressInterval = setInterval(() => {
-                                if (!ytPlayer || !ytReady) return;
-                                ytCurrentTime = ytPlayer.getCurrentTime() || 0;
-                                ytDuration    = ytPlayer.getDuration() || 0;
-                                if (ytDuration > 0) {
-                                    const pct = (ytCurrentTime / ytDuration) * 100;
-                                    progressFill.style.width = pct + '%';
-                                    progressThumb.style.left = pct + '%';
-                                    const remaining = ytDuration - ytCurrentTime;
-                                    timeDisplay.textContent = formatTime(remaining);
-                                    totalTimeDisplay.textContent = formatTime(ytDuration);
-                                }
-                            }, 500);
-                        },
-                        onStateChange: (event) => {
-                            const S = YT.PlayerState;
-                            ytPaused = (event.data !== S.PLAYING);
-                            updatePlayButton();
-                            if (event.data === S.PLAYING) {
-                                showCenterIcon(false);
-                                updateControlsVisibility();
-                            } else if (event.data === S.PAUSED || event.data === S.ENDED) {
-                                showCenterIcon(true);
-                                showControls(); clearTimeout(hideTimeout);
-                            }
-                        }
-                    }
-                });
-            });
-        }
-
-        /* ══ منطق Vimeo Player API ══ */
-        if (isVimeo) {
-            const vimeoScript = document.createElement('script');
-            vimeoScript.src = 'https://player.vimeo.com/api/player.js';
-            vimeoScript.onload = () => {
-                vimeoPlayer = new Vimeo.Player(mediaElement);
-                vimeoPlayer.ready().then(() => {
-                    wrapper.classList.remove('loading');
-                    setControlsDisabled(false);
-                    vimeoPlayer.getDuration().then(d => {
-                        ytDuration = d;
-                        totalTimeDisplay.textContent = formatTime(d);
-                    });
-                    setInterval(() => {
-                        vimeoPlayer.getCurrentTime().then(t => {
-                            ytCurrentTime = t;
-                            if (ytDuration > 0) {
-                                const pct = (t / ytDuration) * 100;
-                                progressFill.style.width = pct + '%';
-                                progressThumb.style.left = pct + '%';
-                                timeDisplay.textContent = formatTime(ytDuration - t);
-                            }
-                        });
-                    }, 500);
-                });
-                vimeoPlayer.on('play',  () => { ytPaused = false; updatePlayButton(); showCenterIcon(false); updateControlsVisibility(); });
-                vimeoPlayer.on('pause', () => { ytPaused = true;  updatePlayButton(); showCenterIcon(true);  showControls(); clearTimeout(hideTimeout); });
-                vimeoPlayer.on('ended', () => { ytPaused = true;  updatePlayButton(); showControls(); clearTimeout(hideTimeout); });
-            };
-            if (!document.querySelector('script[src*="vimeo.com/api/player"]')) {
-                document.head.appendChild(vimeoScript);
-            } else {
-                vimeoScript.onload();
-            }
-        }
-
-        /* iframe بدون API (روابط أخرى): نفتح أدوات الـ overlay فقط */
-        if (isIframe && !isYouTube && !isVimeo) {
+        videoElement.addEventListener('canplay', () => {
             wrapper.classList.remove('loading');
             setControlsDisabled(false);
+            updateTotalTimeDisplay();
+        }, { once: true });
+        videoElement.addEventListener('error', () => { wrapper.classList.remove('loading'); setControlsDisabled(false); });
+        videoElement.addEventListener('durationchange', updateTotalTimeDisplay);
+
+        let volumeStorageKey = null;
+        function getVolumeKey() {
+            if (!volumeStorageKey) volumeStorageKey = getStorageKey(videoElement.src || '', 'vol');
+            return volumeStorageKey;
+        }
+        function saveCurrentVolume() {
+            try { localStorage.setItem(getVolumeKey(), videoElement.muted ? '0' : videoElement.volume.toString()); } catch(e) {}
+        }
+        function restoreVolume() {
+            try {
+                const saved = localStorage.getItem(getVolumeKey());
+                if (saved !== null) {
+                    let vol = parseFloat(saved);
+                    if (!isNaN(vol)) {
+                        videoElement.muted   = vol === 0;
+                        videoElement.volume  = Math.min(1, Math.max(0, vol));
+                        setVolume(videoElement.muted ? 0 : videoElement.volume);
+                        return;
+                    }
+                }
+            } catch(e) {}
+            setVolume(1);
         }
 
-        /* ══ دوال مشتركة (video + iframe) ══ */
+        let isSaving     = false;
+        let saveInterval = null;
+        let storageKey   = null;
+        function getPosKey() {
+            if (!storageKey) storageKey = getStorageKey(videoElement.src || '', 'pos');
+            return storageKey;
+        }
+        function updateSaveIcon() {
+            saveBtn.innerHTML = isSaving ? SVG_SAVE_ACTIVE : SVG_SAVE_INACTIVE;
+            isSaving ? saveBtn.classList.add('active') : saveBtn.classList.remove('active');
+        }
+        function saveCurrentPosition() {
+            if (!isSaving) return;
+            const t = videoElement.currentTime;
+            if (!isNaN(t) && t > 0) try { localStorage.setItem(getPosKey(), t.toString()); } catch(e) {}
+        }
+        function restoreSavedPosition() {
+            try {
+                const saved = localStorage.getItem(getPosKey());
+                if (saved) {
+                    const t = parseFloat(saved);
+                    if (!isNaN(t) && t > 0) { isSaving = true; updateSaveIcon(); videoElement.currentTime = t; }
+                }
+            } catch(e) {}
+        }
+        function startSaving() {
+            isSaving = true; updateSaveIcon(); saveCurrentPosition();
+            saveInterval = setInterval(saveCurrentPosition, 1000);
+        }
+        function stopSaving() {
+            isSaving = false; updateSaveIcon();
+            clearInterval(saveInterval); saveInterval = null;
+            try { localStorage.removeItem(getPosKey()); } catch(e) {}
+        }
+        saveBtn.addEventListener('click', (e) => { e.stopPropagation(); if (isSaving) stopSaving(); else startSaving(); });
+        videoElement.addEventListener('seeked',      () => saveCurrentPosition());
+        videoElement.addEventListener('timeupdate',  () => { if (isSaving) saveCurrentPosition(); });
+        videoElement.addEventListener('loadedmetadata', () => {
+            storageKey = getStorageKey(videoElement.src || '', 'pos');
+            restoreSavedPosition(); restoreVolume();
+            updateProgressBar(); updateTotalTimeDisplay();
+        });
 
-        function isPlayerPaused() {
-            if (!isIframe) return mediaElement.paused;
-            return ytPaused;
-        }
+        allPlayers.push({ videoElement, wrapper, saveCurrentPosition, saveCurrentVolume });
 
-        function playerPlay() {
-            if (!isIframe) { mediaElement.play(); return; }
-            if (ytPlayer  && ytReady)    { ytPlayer.playVideo(); return; }
-            if (vimeoPlayer)             { vimeoPlayer.play();   return; }
-        }
-        function playerPause() {
-            if (!isIframe) { mediaElement.pause(); return; }
-            if (ytPlayer  && ytReady)    { ytPlayer.pauseVideo(); return; }
-            if (vimeoPlayer)             { vimeoPlayer.pause();   return; }
-        }
-        function playerSeekTo(t) {
-            if (!isIframe) { mediaElement.currentTime = t; return; }
-            if (ytPlayer  && ytReady)    { ytPlayer.seekTo(t, true); ytCurrentTime = t; return; }
-            if (vimeoPlayer)             { vimeoPlayer.setCurrentTime(t); ytCurrentTime = t; return; }
-        }
-        function playerDuration() {
-            if (!isIframe) return mediaElement.duration || 0;
-            return ytDuration || 0;
-        }
-        function playerCurrentTime() {
-            if (!isIframe) return mediaElement.currentTime || 0;
-            return ytCurrentTime || 0;
-        }
-
-        /* ══ إدارة ظهور عناصر التحكم ══ */
         let hideTimeout = null;
         let mobileControlsVisible = false;
 
@@ -1501,7 +2119,7 @@
             clearTimeout(hideTimeout);
             if (isDragging) return;
             hideTimeout = setTimeout(() => {
-                if (!isPlayerPaused() && !isDragging) {
+                if (!videoElement.paused && !isDragging) {
                     wrapper.classList.remove('controls-visible');
                     wrapper.classList.add('cursor-hidden');
                     if (isMobileDevice()) mobileControlsVisible = false;
@@ -1509,68 +2127,60 @@
             }, 3000);
         }
         function updateControlsVisibility() {
-            if (isPlayerPaused()) { showControls(); clearTimeout(hideTimeout); }
-            else { scheduleHide(); }
+            if (videoElement.paused) { showControls(); clearTimeout(hideTimeout); }
+            else scheduleHide();
         }
 
-        wrapper.addEventListener('mousemove', () => {
-            showControls();
-            if (!isPlayerPaused()) scheduleHide();
-        });
+        wrapper.addEventListener('mousemove', () => { showControls(); if (!videoElement.paused) scheduleHide(); });
         wrapper.addEventListener('mouseleave', () => {
             if (isDragging) return;
-            if (!isPlayerPaused()) {
+            if (!videoElement.paused) {
                 clearTimeout(hideTimeout);
-                wrapper.classList.remove('controls-visible');
-                wrapper.classList.remove('cursor-hidden');
+                wrapper.classList.remove('controls-visible', 'cursor-hidden');
                 if (isMobileDevice()) mobileControlsVisible = false;
             }
         });
 
         function updateTimeDisplay() {
-            const remaining = playerDuration() - playerCurrentTime();
+            const remaining = (videoElement.duration || 0) - (videoElement.currentTime || 0);
             timeDisplay.textContent = formatTime(remaining);
         }
         function updateProgressBar() {
-            if (!mediaElement.duration) return;
-            const pct = (mediaElement.currentTime / mediaElement.duration) * 100;
-            progressFill.style.width  = pct + '%';
-            progressThumb.style.left  = pct + '%';
+            if (!videoElement.duration) return;
+            const pct = (videoElement.currentTime / videoElement.duration) * 100;
+            progressFill.style.width = pct + '%';
+            progressThumb.style.left = pct + '%';
             updateTimeDisplay();
         }
         function updateBuffered() {
-            if (!mediaElement.duration || !mediaElement.buffered.length) return;
-            const pct = (mediaElement.buffered.end(mediaElement.buffered.length - 1) / mediaElement.duration) * 100;
+            if (!videoElement.duration || !videoElement.buffered.length) return;
+            const pct = (videoElement.buffered.end(videoElement.buffered.length - 1) / videoElement.duration) * 100;
             progressBuffered.style.width = pct + '%';
         }
-
-        function getPctFromEvent(e, trackEl) {
-            const rect = trackEl.getBoundingClientRect();
+        function getPctFromEvent(e, el) {
+            const rect = el.getBoundingClientRect();
             return Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
         }
-        function getPctFromTouch(touch, trackEl) {
-            const rect = trackEl.getBoundingClientRect();
+        function getPctFromTouch(touch, el) {
+            const rect = el.getBoundingClientRect();
             return Math.max(0, Math.min((touch.clientX - rect.left) / rect.width, 1));
         }
         function applySeekPct(pct) {
-            const dur = playerDuration();
-            if (!dur) return;
-            const newTime = pct * dur;
-            playerSeekTo(newTime);
+            if (!videoElement.duration) return;
+            const newTime = pct * videoElement.duration;
+            videoElement.currentTime = newTime;
             progressFill.style.width = (pct * 100) + '%';
             progressThumb.style.left = (pct * 100) + '%';
-            timeDisplay.textContent  = formatTime(dur - newTime);
+            timeDisplay.textContent  = formatTime(videoElement.duration - newTime);
         }
         function updateTooltip(clientX) {
-            const dur = playerDuration();
-            if (!dur) return;
+            if (!videoElement.duration) return;
             const rect = progressTrack.getBoundingClientRect();
-            const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-            progressTooltip.textContent = formatTime((x / rect.width) * dur);
+            let x = clientX - rect.left; x = Math.max(0, Math.min(x, rect.width));
+            progressTooltip.textContent = formatTime((x / rect.width) * videoElement.duration);
             progressTooltip.style.left  = x + 'px';
         }
 
-        /* شريط التقدم - ماوس */
         let seekingProgress = false;
         progressTrack.addEventListener('mousedown', (e) => {
             e.stopPropagation(); seekingProgress = true; isDragging = true;
@@ -1583,12 +2193,15 @@
             else if (seekingVolume) { volFromClientX(e.clientX); }
         });
         document.addEventListener('mouseup', () => {
-            if (seekingProgress) { seekingProgress = false; progressTrack.classList.remove('dragging'); isDragging = false; if (!isPlayerPaused()) scheduleHide(); }
-            if (seekingVolume)   { seekingVolume   = false; isDragging = false; if (!isPlayerPaused()) scheduleHide(); }
+            if (seekingProgress) {
+                seekingProgress = false; isDragging = false;
+                progressTrack.classList.remove('dragging');
+                if (!videoElement.paused) scheduleHide();
+            }
+            if (seekingVolume) { seekingVolume = false; isDragging = false; if (!videoElement.paused) scheduleHide(); }
         });
         progressTrack.addEventListener('mousemove', (e) => updateTooltip(e.clientX));
 
-        /* شريط التقدم - لمس */
         let touchSeekingProgress = false;
         progressTrack.addEventListener('touchstart', (e) => {
             e.stopPropagation(); e.preventDefault();
@@ -1598,92 +2211,98 @@
             const t = e.touches[0]; applySeekPct(getPctFromTouch(t, progressTrack)); updateTooltip(t.clientX);
         }, { passive: false });
         progressTrack.addEventListener('touchmove', (e) => {
-            if (!touchSeekingProgress) return; e.stopPropagation(); e.preventDefault();
+            if (!touchSeekingProgress) return;
+            e.stopPropagation(); e.preventDefault();
             const t = e.touches[0]; applySeekPct(getPctFromTouch(t, progressTrack)); updateTooltip(t.clientX);
         }, { passive: false });
         progressTrack.addEventListener('touchend', (e) => {
-            if (!touchSeekingProgress) return; e.stopPropagation();
-            touchSeekingProgress = false; progressTrack.classList.remove('dragging'); isDragging = false; scheduleHide();
+            if (!touchSeekingProgress) return;
+            e.stopPropagation(); touchSeekingProgress = false; isDragging = false;
+            progressTrack.classList.remove('dragging'); scheduleHide();
         }, { passive: true });
         progressTrack.addEventListener('touchcancel', () => {
-            touchSeekingProgress = false; progressTrack.classList.remove('dragging'); isDragging = false;
+            touchSeekingProgress = false; isDragging = false; progressTrack.classList.remove('dragging');
         }, { passive: true });
 
-        /* شريط الصوت */
         let seekingVolume = false;
         function volFromClientX(clientX) {
-            if (isIframe) return; // الصوت غير متاح للـ iframe
             const rect = volumeTrack.getBoundingClientRect();
-            setVolume(Math.max(0, Math.min((clientX - rect.left) / rect.width, 1)));
+            let x = clientX - rect.left; x = Math.max(0, Math.min(x, rect.width));
+            setVolume(x / rect.width);
         }
         volumeTrack.addEventListener('mousedown', (e) => {
-            if (isIframe) return; e.stopPropagation(); seekingVolume = true; isDragging = true;
+            e.stopPropagation(); seekingVolume = true; isDragging = true;
             showControls(); clearTimeout(hideTimeout); volFromClientX(e.clientX);
         });
 
-        let touchSeekingVolume = false, volumeTouchExpandTimer = null;
+        let touchSeekingVolume = false;
+        let volumeTouchExpandTimer = null;
         volumeIcon.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (isIframe) return; // الصوت غير متاح للـ iframe
             if (isMobileDevice()) {
                 volumeWrap.classList.add('touch-expanded');
                 clearTimeout(volumeTouchExpandTimer);
-                volumeTouchExpandTimer = setTimeout(() => { volumeWrap.classList.remove('touch-expanded'); }, 3000);
+                volumeTouchExpandTimer = setTimeout(() => volumeWrap.classList.remove('touch-expanded'), 3000);
             }
             toggleMute();
         });
         volumeTrack.addEventListener('touchstart', (e) => {
-            if (isIframe) return; e.stopPropagation(); e.preventDefault();
-            touchSeekingVolume = true; isDragging = true; showControls(); clearTimeout(hideTimeout);
+            e.stopPropagation(); e.preventDefault();
+            touchSeekingVolume = true; isDragging = true;
+            showControls(); clearTimeout(hideTimeout);
             volumeTrack.style.height = '6px';
-            const touch = e.touches[0]; const rect = volumeTrack.getBoundingClientRect();
-            setVolume(Math.max(0, Math.min((touch.clientX - rect.left) / rect.width, 1)));
+            const t = e.touches[0]; const rect = volumeTrack.getBoundingClientRect();
+            setVolume(Math.max(0, Math.min((t.clientX - rect.left) / rect.width, 1)));
             clearTimeout(volumeTouchExpandTimer);
         }, { passive: false });
         volumeTrack.addEventListener('touchmove', (e) => {
-            if (!touchSeekingVolume || isIframe) return; e.stopPropagation(); e.preventDefault();
-            const touch = e.touches[0]; const rect = volumeTrack.getBoundingClientRect();
-            setVolume(Math.max(0, Math.min((touch.clientX - rect.left) / rect.width, 1)));
+            if (!touchSeekingVolume) return;
+            e.stopPropagation(); e.preventDefault();
+            const t = e.touches[0]; const rect = volumeTrack.getBoundingClientRect();
+            setVolume(Math.max(0, Math.min((t.clientX - rect.left) / rect.width, 1)));
         }, { passive: false });
         volumeTrack.addEventListener('touchend', (e) => {
-            if (!touchSeekingVolume) return; e.stopPropagation();
-            touchSeekingVolume = false; volumeTrack.style.height = ''; isDragging = false; scheduleHide();
-            volumeTouchExpandTimer = setTimeout(() => { volumeWrap.classList.remove('touch-expanded'); }, 2000);
+            if (!touchSeekingVolume) return;
+            e.stopPropagation(); touchSeekingVolume = false; isDragging = false;
+            volumeTrack.style.height = ''; scheduleHide();
+            volumeTouchExpandTimer = setTimeout(() => volumeWrap.classList.remove('touch-expanded'), 2000);
         }, { passive: true });
         volumeTrack.addEventListener('touchcancel', () => {
-            touchSeekingVolume = false; volumeTrack.style.height = ''; isDragging = false;
+            touchSeekingVolume = false; isDragging = false; volumeTrack.style.height = '';
         }, { passive: true });
 
+        videoElement.addEventListener('timeupdate', updateProgressBar);
+        videoElement.addEventListener('progress',   updateBuffered);
+
         function setVolume(vol) {
-            if (isIframe) return;
             vol = Math.max(0, Math.min(1, vol));
-            mediaElement.volume = vol; mediaElement.muted = (vol === 0);
-            volumeFill.style.width = (vol * 100) + '%';
-            volumeThumb.style.left = (vol * 100) + '%';
-            volumeIcon.innerHTML   = (vol === 0) ? SVG_VOL_OFF : SVG_VOL_ON;
+            videoElement.volume  = vol;
+            videoElement.muted   = vol === 0;
+            volumeFill.style.width  = (vol * 100) + '%';
+            volumeThumb.style.left  = (vol * 100) + '%';
+            volumeIcon.innerHTML    = vol === 0 ? SVG_VOL_OFF : SVG_VOL_ON;
+            saveCurrentVolume();
         }
         function toggleMute() {
-            if (isIframe) return;
-            if (mediaElement.muted || mediaElement.volume === 0) { const rv = mediaElement._lastVol || 1; setVolume(rv); }
-            else { mediaElement._lastVol = mediaElement.volume; setVolume(0); }
+            if (videoElement.muted || videoElement.volume === 0) {
+                setVolume(videoElement._lastVol || 1);
+            } else {
+                videoElement._lastVol = videoElement.volume;
+                setVolume(0);
+            }
         }
-
-        function updatePlayButton() { playBtn.innerHTML = isPlayerPaused() ? SVG_PLAY : SVG_PAUSE; }
-
+        function updatePlayButton() { playBtn.innerHTML = videoElement.paused ? SVG_PLAY : SVG_PAUSE; }
         function pauseOthers() {
-            allPlayers.forEach(p => { if (p.videoElement !== mediaElement && !p.videoElement.paused) p.videoElement.pause(); });
+            allPlayers.forEach(p => { if (p.videoElement !== videoElement && p.videoElement && !p.videoElement.paused) p.videoElement.pause(); });
         }
         function playPause() {
-            if (isPlayerPaused()) { if (!isIframe) pauseOthers(); playerPlay();  showCenterIcon(false); }
-            else                  { playerPause(); showCenterIcon(true); }
-            if (!isIframe) updateControlsVisibility();
+            if (videoElement.paused) { pauseOthers(); videoElement.play(); showCenterIcon(false); }
+            else { videoElement.pause(); showCenterIcon(true); }
         }
-        function restartVideo() {
-            if (!isIframe) { pauseOthers(); mediaElement.currentTime = 0; mediaElement.play(); showCenterIcon(false); }
-        }
+        function restartVideo() { pauseOthers(); videoElement.currentTime = 0; videoElement.play(); showCenterIcon(false); }
 
-        /* ══ seek بالتراكم ══ */
-        let seekAccumLeft = 0, seekAccumRight = 0, seekResetTimerLeft = null, seekResetTimerRight = null;
+        let seekAccumLeft = 0, seekAccumRight = 0;
+        let seekResetTimerLeft = null, seekResetTimerRight = null;
         const SEEK_RESET_DELAY = 1000;
 
         function showFlash(side, seconds) {
@@ -1695,66 +2314,61 @@
         }
         function seekBy(seconds) {
             const side = seconds < 0 ? 'left' : 'right';
-            const abs  = Math.abs(seconds);
-            const cur  = playerCurrentTime();
-            const dur  = playerDuration();
             if (side === 'left') {
-                clearTimeout(seekResetTimerLeft); seekAccumLeft += abs;
-                playerSeekTo(Math.max(0, cur - abs));
+                clearTimeout(seekResetTimerLeft); seekAccumLeft += Math.abs(seconds);
+                videoElement.currentTime = Math.max(0, videoElement.currentTime - Math.abs(seconds));
                 showFlash('left', seekAccumLeft);
                 seekResetTimerLeft = setTimeout(() => { seekAccumLeft = 0; }, SEEK_RESET_DELAY);
             } else {
-                clearTimeout(seekResetTimerRight); seekAccumRight += abs;
-                playerSeekTo(Math.min(dur || 0, cur + abs));
+                clearTimeout(seekResetTimerRight); seekAccumRight += Math.abs(seconds);
+                videoElement.currentTime = Math.min(videoElement.duration || 0, videoElement.currentTime + Math.abs(seconds));
                 showFlash('right', seekAccumRight);
                 seekResetTimerRight = setTimeout(() => { seekAccumRight = 0; }, SEEK_RESET_DELAY);
             }
-            if (!isIframe) updateProgressBar();
+            updateProgressBar();
         }
 
-        /* ══ منطق اللمس ══ */
         const SCROLL_THRESHOLD = 10, TAP_MOVE_LIMIT = 8, TAP_DELAY = 300;
         let touchStartX = 0, touchStartY = 0, touchMoved = false, touchIsScrolling = false;
         let tapCount = 0, tapTimer = null, tapSide = null;
 
         wrapper.addEventListener('touchstart', (e) => {
-            const t = e.target;
-            if (t.closest('.custom-controls') || t.closest('.cvp-settings-corner') || t.closest('.seek-flash') || t.closest('.cvp-iframe-overlay') === null && isIframe) {
-                if (t.closest('.custom-controls') || t.closest('.cvp-settings-corner') || t.closest('.seek-flash')) return;
-            }
-            const touch = e.touches[0];
-            touchStartX = touch.clientX; touchStartY = touch.clientY;
+            const target = e.target;
+            if (target.closest('.custom-controls') || target.closest('.cvp-settings-corner') || target.closest('.seek-flash')) return;
+            const t = e.touches[0]; touchStartX = t.clientX; touchStartY = t.clientY;
             touchMoved = false; touchIsScrolling = false;
         }, { passive: true });
-
         wrapper.addEventListener('touchmove', (e) => {
-            const t = e.target;
-            if (t.closest('.custom-controls') || t.closest('.cvp-settings-corner')) return;
-            const touch = e.touches[0];
-            const dx = touch.clientX - touchStartX, dy = touch.clientY - touchStartY;
-            if (!touchMoved && (Math.abs(dx) > TAP_MOVE_LIMIT || Math.abs(dy) > TAP_MOVE_LIMIT)) touchMoved = true;
-            if (!touchIsScrolling && Math.abs(dy) > SCROLL_THRESHOLD && Math.abs(dy) > Math.abs(dx)) touchIsScrolling = true;
+            const target = e.target;
+            if (target.closest('.custom-controls') || target.closest('.cvp-settings-corner')) return;
+            const t = e.touches[0];
+            const dx = Math.abs(t.clientX - touchStartX), dy = Math.abs(t.clientY - touchStartY);
+            if (!touchMoved && (dx > TAP_MOVE_LIMIT || dy > TAP_MOVE_LIMIT)) touchMoved = true;
+            if (!touchIsScrolling && dy > SCROLL_THRESHOLD && dy > dx) touchIsScrolling = true;
             if (!touchIsScrolling) e.preventDefault();
         }, { passive: false });
-
         wrapper.addEventListener('touchend', (e) => {
-            const t = e.target;
-            if (t.closest('.custom-controls') || t.closest('.cvp-settings-corner') || t.closest('.seek-flash')) return;
+            const target = e.target;
+            if (target.closest('.custom-controls') || target.closest('.cvp-settings-corner') || target.closest('.seek-flash')) return;
             if (touchIsScrolling || touchMoved) { touchIsScrolling = false; touchMoved = false; return; }
             e.preventDefault();
-            if (activeMenuEl) { menuJustClosed = true; closeAll(); setTimeout(() => { menuJustClosed = false; }, 300); touchMoved = false; touchIsScrolling = false; return; }
+            if (activeMenuEl) {
+                menuJustClosed = true; closeAll();
+                setTimeout(() => { menuJustClosed = false; }, 300);
+                touchMoved = false; touchIsScrolling = false; return;
+            }
             if (menuJustClosed) { touchMoved = false; touchIsScrolling = false; return; }
             if (!mobileControlsVisible) { showControls(); scheduleHide(); touchMoved = false; touchIsScrolling = false; return; }
-            const touch  = e.changedTouches[0];
-            const rect   = wrapper.getBoundingClientRect();
-            const touchX = touch.clientX - rect.left;
-            const side   = touchX < rect.width / 2 ? 'left' : 'right';
+            const touch = e.changedTouches[0];
+            const rect  = wrapper.getBoundingClientRect();
+            const side  = (touch.clientX - rect.left) < rect.width / 2 ? 'left' : 'right';
             if (tapCount === 1 && tapSide === side) {
                 clearTimeout(tapTimer); tapCount = 0; tapSide = null;
                 seekBy(side === 'right' ? 5 : -5);
-                showControls(); if (!isPlayerPaused()) scheduleHide();
+                showControls(); if (!videoElement.paused) scheduleHide();
             } else {
-                tapCount = 1; tapSide = side; clearTimeout(tapTimer);
+                tapCount = 1; tapSide = side;
+                clearTimeout(tapTimer);
                 tapTimer = setTimeout(() => {
                     if (tapCount === 1) { playPause(); showControls(); updateControlsVisibility(); }
                     tapCount = 0; tapSide = null;
@@ -1762,98 +2376,89 @@
             }
             touchMoved = false; touchIsScrolling = false;
         }, { passive: false });
-
         wrapper.addEventListener('touchcancel', () => { touchMoved = false; touchIsScrolling = false; }, { passive: true });
 
-        /* ══ لوحة المفاتيح ══ */
         wrapper.setAttribute('tabindex', '0');
         wrapper.addEventListener('keydown', (e) => {
             switch (e.key) {
-                case ' ': case 'k': e.preventDefault(); if (!isIframe && activeMenuEl) { closeAll(); break; } playPause(); break;
+                case ' ': case 'k':
+                    e.preventDefault();
+                    if (activeMenuEl) { closeAll(); break; }
+                    playPause(); break;
                 case 'ArrowRight': e.preventDefault(); seekBy(5); break;
                 case 'ArrowLeft':  e.preventDefault(); seekBy(-5); break;
-                case 'ArrowUp':    e.preventDefault(); if (!isIframe) setVolume(mediaElement.volume + 0.1); break;
-                case 'ArrowDown':  e.preventDefault(); if (!isIframe) setVolume(mediaElement.volume - 0.1); break;
+                case 'ArrowUp':    e.preventDefault(); setVolume(videoElement.volume + 0.1); break;
+                case 'ArrowDown':  e.preventDefault(); setVolume(videoElement.volume - 0.1); break;
                 case 'f': e.preventDefault(); toggleFullscreen(); break;
-                case 'm': e.preventDefault(); if (!isIframe) toggleMute(); break;
-                case 'Escape': if (!isIframe && activeMenuEl) { e.preventDefault(); closeAll(); } break;
+                case 'm': e.preventDefault(); toggleMute(); break;
+                case 'Escape': if (activeMenuEl) { e.preventDefault(); closeAll(); } break;
             }
         });
 
-        /* ══ فول-سكرين ══ */
-        function updateFullscreenButton() { fullscreenBtn.innerHTML = document.fullscreenElement ? SVG_FULLSCREEN_EXIT : SVG_FULLSCREEN_ENTER; }
+        function updateFullscreenButton() {
+            fullscreenBtn.innerHTML = document.fullscreenElement ? SVG_FULLSCREEN_EXIT : SVG_FULLSCREEN_ENTER;
+        }
         function toggleFullscreen() {
             if (!document.fullscreenElement) wrapper.requestFullscreen().catch(err => console.log(err.message));
             else document.exitFullscreen();
         }
         document.addEventListener('fullscreenchange', () => {
             if (document.fullscreenElement === wrapper) document.body.classList.add('dideofullscreen');
-            else if (!document.fullscreenElement) document.body.classList.remove('dideofullscreen');
+            else if (!document.fullscreenElement)       document.body.classList.remove('dideofullscreen');
             updateFullscreenButton();
-            /* عند الدخول للفول-سكرين في iframe: نجعل الـ overlay لا يعوق الفيديو */
-            if (isIframe && iframeOverlay) {
-                iframeOverlay.style.pointerEvents = document.fullscreenElement === wrapper ? 'none' : 'auto';
-            }
         });
 
-        /* ══ scanline & scan ══ */
-        if (!isIframe) {
-            toggleScanBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (scanlineDiv.style.display === 'block') { scanlineDiv.style.display = 'none'; toggleScanBtn.classList.remove('active'); }
-                else { scanlineDiv.style.display = 'block'; toggleScanBtn.classList.add('active'); }
-            });
-            scanlineDiv.addEventListener('click', (e) => {
+        toggleScanBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (scanlineDiv.style.display === 'block') { scanlineDiv.style.display = 'none'; toggleScanBtn.classList.remove('active'); }
+            else { scanlineDiv.style.display = 'block'; toggleScanBtn.classList.add('active'); }
+        });
+        scanlineDiv.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (activeMenuEl) { menuJustClosed = true; closeAll(); setTimeout(() => { menuJustClosed = false; }, 300); return; }
+            if (menuJustClosed) return;
+            playPause();
+        });
+        videoElement.addEventListener('click', (e) => {
+            if (!isMobileDevice()) {
                 e.stopPropagation();
                 if (activeMenuEl) { menuJustClosed = true; closeAll(); setTimeout(() => { menuJustClosed = false; }, 300); return; }
                 if (menuJustClosed) return;
                 playPause();
-            });
-            mediaElement.addEventListener('click', (e) => {
-                if (!isMobileDevice()) {
-                    e.stopPropagation();
-                    if (activeMenuEl) { menuJustClosed = true; closeAll(); setTimeout(() => { menuJustClosed = false; }, 300); return; }
-                    if (menuJustClosed) return;
-                    playPause();
-                }
-            });
-        }
+            }
+        });
 
-        /* ══ الأزرار ══ */
-        playBtn.addEventListener('click', (e) => { e.stopPropagation(); playPause(); });
-        if (!isIframe) restartBtn.addEventListener('click', (e) => { e.stopPropagation(); restartVideo(); });
+        playBtn.addEventListener('click',       (e) => { e.stopPropagation(); playPause(); });
+        restartBtn.addEventListener('click',    (e) => { e.stopPropagation(); restartVideo(); });
         fullscreenBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleFullscreen(); });
 
-        /* ══ نقر على الـ overlay للـ iframe ══ */
-        if (isIframe && iframeOverlay) {
-            iframeOverlay.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (menuJustClosed) return;
-                if (!isMobileDevice()) playPause();
-            });
-        }
+        videoElement.addEventListener('play',  () => { updatePlayButton(); updateControlsVisibility(); });
+        videoElement.addEventListener('pause', () => { updatePlayButton(); updateControlsVisibility(); });
+        videoElement.addEventListener('ended', () => { updatePlayButton(); updateControlsVisibility(); });
 
-        showControls(); updatePlayButton(); updateTimeDisplay();
-        if (!isIframe) { const si = controls.querySelector('.Video-save'); if (si) si.innerHTML = SVG_SAVE_INACTIVE; }
+        showControls(); updatePlayButton(); updateTimeDisplay(); updateSaveIcon(); updateTotalTimeDisplay();
 
         return wrapper;
     };
 
-    /* ══ تطبيق على جميع الفيديوهات والـ iframes ══ */
+    /* ============================================================
+       تطبيق المشغّل على كل <video> و <iframe>
+    ============================================================ */
     window.applyToAllVideos = function() {
-        // فيديوهات عادية
+        // فيديو عادي
         document.querySelectorAll('video:not([data-customized])').forEach(video => {
             customVideoPlayer(video);
             video.setAttribute('data-customized', 'true');
         });
-        // iframes (يوتيوب، فيميو، وغيرها)
+
+        // iframe (يوتيوب / Vimeo / غيره)
         document.querySelectorAll('iframe:not([data-customized])').forEach(iframe => {
-            const src = iframe.getAttribute('src') || '';
-            // نتحقق أنه رابط فيديو معروف أو يحتوي على كلمة embed/video
-            if (/youtube\.com|youtu\.be|vimeo\.com|embed|player/i.test(src)) {
-                customVideoPlayer(iframe);
-                iframe.setAttribute('data-customized', 'true');
-            }
+            const src = iframe.src || iframe.getAttribute('src') || '';
+            // نتجاهل الـ iframes التي ليست فيديو
+            const isVideo = /youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com|facebook\.com\/plugins\/video|twitch\.tv/i.test(src);
+            if (!isVideo) return;
+            customIframePlayer(iframe);
+            iframe.setAttribute('data-customized', 'true');
         });
     };
 
